@@ -254,6 +254,56 @@ export type Database = {
           },
         ]
       }
+      company_templates: {
+        Row: {
+          body: string
+          channel: Database["public"]["Enums"]["template_channel"]
+          company_id: string
+          id: string
+          is_active: boolean
+          label: string
+          requires_human_review: boolean
+          subject: string | null
+          template_key: string
+          updated_at: string
+          variables: Json
+        }
+        Insert: {
+          body?: string
+          channel: Database["public"]["Enums"]["template_channel"]
+          company_id: string
+          id?: string
+          is_active?: boolean
+          label: string
+          requires_human_review?: boolean
+          subject?: string | null
+          template_key: string
+          updated_at?: string
+          variables?: Json
+        }
+        Update: {
+          body?: string
+          channel?: Database["public"]["Enums"]["template_channel"]
+          company_id?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          requires_human_review?: boolean
+          subject?: string | null
+          template_key?: string
+          updated_at?: string
+          variables?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_templates_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creators: {
         Row: {
           created_at: string
@@ -345,6 +395,7 @@ export type Database = {
       configuration_value_type: "boolean" | "integer" | "number" | "string"
       integration_state: "disconnected" | "mock" | "sandbox" | "live" | "error"
       team_role: "junior" | "senior"
+      template_channel: "whatsapp" | "email" | "system" | "document"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -475,6 +526,7 @@ export const Constants = {
       configuration_value_type: ["boolean", "integer", "number", "string"],
       integration_state: ["disconnected", "mock", "sandbox", "live", "error"],
       team_role: ["junior", "senior"],
+      template_channel: ["whatsapp", "email", "system", "document"],
     },
   },
 } as const

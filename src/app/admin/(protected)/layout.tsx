@@ -18,7 +18,7 @@ const platformItems = [
   { label: "Brand & Appearance", href: "/admin/settings/brand" },
   { label: "Integrations", href: "/admin/settings/integrations" },
   { label: "Configuration", href: "/admin/settings/configuration" },
-  { label: "Templates" },
+  { label: "Templates", href: "/admin/settings/templates" },
   { label: "Audit / System Logs" },
 ];
 
