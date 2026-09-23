@@ -1,11 +1,33 @@
 import Link from "next/link";
 
 import { requireAdminContext } from "@/auth/admin-context";
+import { IllustrativeNote } from "@/components/admin/illustrative-note";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type Props = {
   searchParams: Promise<{ q?: string; tab?: string }>;
 };
+
+const illustrativePool = [
+  {
+    name: "Illustrative Candidate A",
+    handle: "@candidatea",
+    followers: "84,200",
+    views: "22,400",
+    er: "2.3%",
+    score: "91",
+    updated: "2d",
+  },
+  {
+    name: "Illustrative Candidate B",
+    handle: "@candidateb",
+    followers: "56,100",
+    views: "18,900",
+    er: "4.7%",
+    score: "86",
+    updated: "5d",
+  },
+];
 
 export default async function CreatorsPage({ searchParams }: Props) {
   const context = await requireAdminContext();
@@ -13,11 +35,14 @@ export default async function CreatorsPage({ searchParams }: Props) {
   const params = await searchParams;
   const tab = params.tab === "pool" ? "pool" : "roster";
 
-  const { data: relationships } = await supabase
-    .from("company_creators")
-    .select("id,status,source,creator_id,creators(id,display_name,primary_handle,updated_at)")
-    .eq("company_id", context.companyId)
-    .order("updated_at", { ascending: false });
+  const { data: relationships } =
+    tab === "roster"
+      ? await supabase
+          .from("company_creators")
+          .select("id,status,source,creator_id,creators(id,display_name,primary_handle,updated_at)")
+          .eq("company_id", context.companyId)
+          .order("updated_at", { ascending: false })
+      : { data: null };
 
   return (
     <div className="ops-page">
@@ -29,6 +54,7 @@ export default async function CreatorsPage({ searchParams }: Props) {
             Roster and Pool stay separate. Candidates never become brand-facing supply.
           </p>
         </div>
+        {tab === "pool" ? <IllustrativeNote /> : null}
       </header>
 
       {params.q ? (
@@ -43,7 +69,37 @@ export default async function CreatorsPage({ searchParams }: Props) {
         <Link href="/admin/creators?tab=pool" data-active={tab === "pool"}>Pool</Link>
       </div>
 
-      {relationships && relationships.length > 0 ? (
+      {tab === "pool" ? (
+        <div className="ops-table-wrap">
+          <table className="ops-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Source</th>
+                <th className="numeric">Followers</th>
+                <th className="numeric">Avg views</th>
+                <th className="numeric">ER</th>
+                <th className="numeric">Score</th>
+                <th className="numeric">Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {illustrativePool.map((candidate) => (
+                <tr key={candidate.handle}>
+                  <td>{candidate.name}<small className="table-subline">{candidate.handle}</small></td>
+                  <td>Discovery</td>
+                  <td className="numeric">{candidate.followers}</td>
+                  <td className="numeric">{candidate.views}</td>
+                  <td className="numeric">{candidate.er}</td>
+                  <td className="numeric">{candidate.score}</td>
+                  <td className="numeric">{candidate.updated}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="provenance">Pool is illustrative until candidate operational storage is added · candidates have no price</p>
+        </div>
+      ) : relationships && relationships.length > 0 ? (
         <div className="ops-table-wrap">
           <table className="ops-table">
             <thead>
@@ -53,7 +109,7 @@ export default async function CreatorsPage({ searchParams }: Props) {
                 <th className="numeric">Followers</th>
                 <th className="numeric">Avg views</th>
                 <th className="numeric">ER</th>
-                <th className="numeric">{tab === "roster" ? "Price (reel)" : "Score"}</th>
+                <th className="numeric">Price (reel)</th>
                 <th className="numeric">Updated</th>
               </tr>
             </thead>
@@ -65,7 +121,7 @@ export default async function CreatorsPage({ searchParams }: Props) {
                 return (
                   <tr key={relationship.id}>
                     <td>{creator?.display_name ?? creator?.primary_handle ?? "Unnamed creator"}</td>
-                    <td>{tab === "roster" ? "TBD" : "Candidate"}</td>
+                    <td>TBD</td>
                     <td className="numeric">—</td>
                     <td className="numeric">—</td>
                     <td className="numeric">—</td>
@@ -79,10 +135,10 @@ export default async function CreatorsPage({ searchParams }: Props) {
         </div>
       ) : (
         <section className="ops-empty">
-          <strong>{tab === "roster" ? "No roster creators yet" : "No candidates in Pool yet"}</strong>
+          <strong>No roster creators yet</strong>
           <p>
-            Use + Add or Discover. Analytics, provenance, freshness and KYC drawer
-            appear when creator operational data exists.
+            Creator operational analytics, provenance, freshness and KYC drawer appear
+            once roster data is populated.
           </p>
         </section>
       )}
