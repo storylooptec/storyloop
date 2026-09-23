@@ -1,5 +1,7 @@
 import { requireAdminContext } from "@/auth/admin-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ContextHelp } from "@/components/admin/context-help";
+import { adminHelp } from "@/help/admin-help";
 
 export default async function AuditLogPage() {
   const context = await requireAdminContext();
@@ -31,7 +33,12 @@ export default async function AuditLogPage() {
               <th>Action</th>
               <th>Entity</th>
               <th>Status</th>
-              <th>Reversible</th>
+              <th>
+                <span className="field-label-with-help">
+                  Reversible
+                  <ContextHelp text={adminHelp.auditUndo} label="About reversible audit events" />
+                </span>
+              </th>
               <th>Minutes</th>
             </tr>
           </thead>
