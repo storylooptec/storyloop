@@ -1,18 +1,25 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 
 import { requireAdminContext } from "@/auth/admin-context";
+import { brandRowToThemeConfig } from "@/design-system/brand-settings";
+import {
+  resolveDefaultTheme,
+  resolveStoryloopTheme,
+  toCssVariables,
+} from "@/design-system/theme";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 import { signOut } from "./actions";
 
 const platformItems = [
-  "Company",
-  "Team & Roles",
-  "Brand & Appearance",
-  "Integrations",
-  "Configuration",
-  "Templates",
-  "Audit / System Logs",
+  { label: "Company" },
+  { label: "Team & Roles" },
+  { label: "Brand & Appearance", href: "/admin/settings/brand" },
+  { label: "Integrations" },
+  { label: "Configuration" },
+  { label: "Templates" },
+  { label: "Audit / System Logs" },
 ];
 
 const operationsItems = [
@@ -30,9 +37,21 @@ export default async function AdminProtectedLayout({
   children: ReactNode;
 }) {
   const context = await requireAdminContext();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: brandSettings } = await supabase
+    .from("company_brand_settings")
+    .select("default_theme,dark_colors,light_colors,gradient,typography,radius,spacing")
+    .eq("company_id", context.companyId)
+    .maybeSingle();
+
+  const config = brandSettings ? brandRowToThemeConfig(brandSettings) : undefined;
+  const themeName = resolveDefaultTheme(config);
+  const tokens = resolveStoryloopTheme(themeName, config);
+  const cssVariables = toCssVariables(tokens) as CSSProperties;
 
   return (
-    <div className="admin-shell">
+    <div className="admin-shell" data-theme={themeName} style={cssVariables}>
       <aside className="admin-sidebar" aria-label="Admin navigation">
         <Link href="/admin" className="admin-brand">
           Storyloop
@@ -41,11 +60,17 @@ export default async function AdminProtectedLayout({
         <section className="admin-section">
           <div className="sl-system-label page-eyebrow">Platform</div>
           <nav className="admin-nav" aria-label="Platform configuration">
-            {platformItems.map((item) => (
-              <span className="admin-nav-item" key={item} aria-disabled="true">
-                {item}
-              </span>
-            ))}
+            {platformItems.map((item) =>
+              item.href ? (
+                <Link className="admin-nav-item" key={item.label} href={item.href}>
+                  {item.label}
+                </Link>
+              ) : (
+                <span className="admin-nav-item" key={item.label} aria-disabled="true">
+                  {item.label}
+                </span>
+              ),
+            )}
           </nav>
         </section>
 
