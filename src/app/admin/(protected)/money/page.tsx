@@ -1,5 +1,7 @@
 import { IllustrativeNote } from "@/components/admin/illustrative-note";
 import { requireAdminContext } from "@/auth/admin-context";
+import { ContextHelp } from "@/components/admin/context-help";
+import { adminHelp } from "@/help/admin-help";
 
 export default async function MoneyPage() {
   const context = await requireAdminContext();
@@ -9,7 +11,13 @@ export default async function MoneyPage() {
     <div className="ops-page">
       <header className="ops-page-header">
         <div>
-          <p className="sl-system-label page-eyebrow">Money · {senior ? "Senior" : "Read only"}</p>
+          <p className="field-label-with-help sl-system-label page-eyebrow">
+            Money · {senior ? "Senior" : "Read only"}
+            <ContextHelp
+              text={senior ? adminHelp.senior : "Money is visible to Junior users, but moving money remains Senior-only."}
+              label="About Money permissions"
+            />
+          </p>
           <h1 className="page-title">Money</h1>
           <p className="page-copy">
             In, owed, float and cap stay visible. Juniors see numbers but cannot move money.
@@ -22,7 +30,10 @@ export default async function MoneyPage() {
         <div><span>In from brands</span><strong>₹6,20,000</strong></div>
         <div><span>Owed to creators</span><strong>₹4,15,000</strong></div>
         <div><span>Float now</span><strong>₹1,30,000</strong></div>
-        <div><span>Float cap</span><strong>TBD</strong></div>
+        <div>
+          <span className="field-label-with-help">Float cap <ContextHelp text={adminHelp.floatCap} label="About float cap" /></span>
+          <strong>TBD</strong>
+        </div>
       </section>
 
       <section className="ops-panel">
