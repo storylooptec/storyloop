@@ -50,8 +50,8 @@ export async function AdminShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="admin-topbar-account">
-            <Link href="/admin/overview?welcome=1" className="admin-help-link" data-tour="help">Help</Link>
-            <span className="admin-role-context">
+            <Link href="/admin/overview?welcome=1" className="admin-help-link">Help</Link>
+            <span className="admin-role-context" data-tour="help">
               <span className="sl-system-label">{context.role}</span>
               <ContextHelp
                 text={context.role === "senior" ? adminHelp.senior : adminHelp.junior}

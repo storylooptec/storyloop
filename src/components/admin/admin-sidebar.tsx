@@ -72,6 +72,7 @@ export function AdminSidebar() {
                   aria-current={isActive(pathname, item.href) ? "page" : undefined}
                   key={item.href}
                   href={item.href}
+                  data-tour={item.href === "/admin/today" ? "today" : undefined}
                   onClick={() => setOpen(false)}
                 >
                   {item.label}

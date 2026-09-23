@@ -42,6 +42,7 @@ export function BrandLivePreview({
       });
     };
 
+    update();
     form.addEventListener("input", update);
     form.addEventListener("change", update);
     return () => {
