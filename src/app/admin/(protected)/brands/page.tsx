@@ -1,6 +1,9 @@
+import { requireAdminContext } from "@/auth/admin-context";
 import { IllustrativeNote } from "@/components/admin/illustrative-note";
 
-export default function BrandsPage() {
+export default async function BrandsPage() {
+  const context = await requireAdminContext();
+  const senior = context.role === "senior";
   return (
     <div className="ops-page">
       <header className="ops-page-header">
@@ -40,7 +43,11 @@ export default function BrandsPage() {
 
         <div className="ops-action-row">
           <button className="secondary-button" type="button">Read & fix</button>
-          <button className="primary-button" type="button">Save draft</button>
+          {senior ? (
+            <button className="primary-button" type="button">Send invite</button>
+          ) : (
+            <button className="secondary-button" type="button">Save draft</button>
+          )}
         </div>
       </section>
     </div>
