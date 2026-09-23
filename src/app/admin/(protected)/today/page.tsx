@@ -1,5 +1,7 @@
 import { requireAdminContext } from "@/auth/admin-context";
 import { IllustrativeNote } from "@/components/admin/illustrative-note";
+import { ContextHelp } from "@/components/admin/context-help";
+import { adminHelp } from "@/help/admin-help";
 
 const needsYou = [
   {
@@ -77,7 +79,10 @@ export default async function TodayPage() {
       <QueueGroup title="Later · 1" rows={later} />
 
       <aside className="minute-counter">
-        <span className="sl-system-label">This week, manual work</span>
+        <span className="field-label-with-help sl-system-label">
+          This week, manual work
+          <ContextHelp text={adminHelp.minuteCounter} label="About the minute counter" />
+        </span>
         <strong>41 min / campaign</strong>
       </aside>
     </div>
