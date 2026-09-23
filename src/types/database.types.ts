@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          company_id: string
+          created_at: string
+          duration_minutes: number | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          is_reversible: boolean
+          metadata: Json
+          status: Database["public"]["Enums"]["audit_event_status"]
+          undo_action_key: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          company_id: string
+          created_at?: string
+          duration_minutes?: number | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          is_reversible?: boolean
+          metadata?: Json
+          status?: Database["public"]["Enums"]["audit_event_status"]
+          undo_action_key?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          company_id?: string
+          created_at?: string
+          duration_minutes?: number | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          is_reversible?: boolean
+          metadata?: Json
+          status?: Database["public"]["Enums"]["audit_event_status"]
+          undo_action_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           created_at: string
@@ -392,6 +451,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      audit_event_status: "success" | "failed"
       configuration_value_type: "boolean" | "integer" | "number" | "string"
       integration_state: "disconnected" | "mock" | "sandbox" | "live" | "error"
       team_role: "junior" | "senior"
@@ -523,6 +583,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      audit_event_status: ["success", "failed"],
       configuration_value_type: ["boolean", "integer", "number", "string"],
       integration_state: ["disconnected", "mock", "sandbox", "live", "error"],
       team_role: ["junior", "senior"],
