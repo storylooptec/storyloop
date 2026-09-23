@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 
 import type { TeamRole } from "@/auth/permissions";
 import { completeAdminOnboarding } from "@/actions/admin-preferences";
@@ -20,18 +21,12 @@ export function AdminOnboarding({
   initiallyOpen: boolean;
   role: TeamRole;
 }) {
-  const [open, setOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const [open, setOpen] = useState(() => initiallyOpen || searchParams.get("welcome") === "1");
   const [tourStep, setTourStep] = useState<number | null>(null);
   const [dontShow, setDontShow] = useState(true);
   const [pending, startTransition] = useTransition();
   const highlighted = useRef<Element | null>(null);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const forced = params.get("welcome") === "1";
-    const hiddenForSession = window.sessionStorage.getItem("storyloop-admin-welcome-hidden") === "1";
-    setOpen(forced || (initiallyOpen && !hiddenForSession));
-  }, [initiallyOpen]);
 
   useEffect(() => {
     highlighted.current?.classList.remove("tour-highlight");
@@ -53,7 +48,6 @@ export function AdminOnboarding({
   }, [tourStep]);
 
   function finish() {
-    window.sessionStorage.setItem("storyloop-admin-welcome-hidden", "1");
     setOpen(false);
     setTourStep(null);
 
