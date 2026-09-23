@@ -109,10 +109,15 @@ export async function saveBrandSettings(formData: FormData) {
     lg: nullableNumber(formData, "radiusLg"),
   };
 
-  const spacing = String(formData.get("spacing") ?? "")
-    .split(",")
-    .map((value) => Number(value.trim()))
-    .filter((value) => Number.isInteger(value) && value > 0);
+  const spacingTokens = formData.getAll("spacingToken");
+  const spacing = spacingTokens.length
+    ? spacingTokens
+        .map((value) => Number(String(value).trim()))
+        .filter((value) => Number.isInteger(value) && value > 0)
+    : String(formData.get("spacing") ?? "")
+        .split(",")
+        .map((value) => Number(value.trim()))
+        .filter((value) => Number.isInteger(value) && value > 0);
 
   if (spacing.length === 0) throw new Error("Spacing tokens are required");
 

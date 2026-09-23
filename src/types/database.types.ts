@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_user_preferences: {
+        Row: {
+          admin_onboarding_completed: boolean
+          company_id: string
+          created_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_onboarding_completed?: boolean
+          company_id: string
+          created_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_onboarding_completed?: boolean
+          company_id?: string
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_user_preferences_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string

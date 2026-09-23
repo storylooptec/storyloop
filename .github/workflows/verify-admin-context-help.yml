@@ -1,9 +1,9 @@
-name: Verify admin context help
+name: Verify Storyloop admin
 
 on:
   push:
     branches:
-      - admin-context-help
+      - main
 
 jobs:
   verify:

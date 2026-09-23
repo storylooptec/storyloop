@@ -187,3 +187,71 @@ export async function uploadBrandAssetAction(formData: FormData) {
   revalidatePath("/admin/settings/brand");
   redirect(`/admin/settings/brand?uploaded=${slot}`);
 }
+
+
+async function clearBrandAsset(slot: BrandAssetSlot, companyId: string) {
+  const supabase = await createServerSupabaseClient();
+  const updatedAt = new Date().toISOString();
+
+  switch (slot) {
+    case "primary_logo":
+      return supabase
+        .from("company_brand_settings")
+        .update({ primary_logo_key: null, primary_logo_meta: null, updated_at: updatedAt })
+        .eq("company_id", companyId);
+    case "dark_logo":
+      return supabase
+        .from("company_brand_settings")
+        .update({ dark_logo_key: null, dark_logo_meta: null, updated_at: updatedAt })
+        .eq("company_id", companyId);
+    case "light_logo":
+      return supabase
+        .from("company_brand_settings")
+        .update({ light_logo_key: null, light_logo_meta: null, updated_at: updatedAt })
+        .eq("company_id", companyId);
+    case "favicon":
+      return supabase
+        .from("company_brand_settings")
+        .update({ favicon_key: null, favicon_meta: null, updated_at: updatedAt })
+        .eq("company_id", companyId);
+  }
+}
+
+export async function removeBrandAssetAction(formData: FormData) {
+  const context = await requirePermission(permissions.approvalsPerform);
+  const slot = String(formData.get("slot") ?? "");
+
+  if (!isBrandAssetSlot(slot)) {
+    throw new Error("Invalid brand asset slot");
+  }
+
+  const oldObjectKey = await getCurrentObjectKey(slot, context.companyId);
+  if (!oldObjectKey) {
+    redirect("/admin/settings/brand");
+  }
+
+  const result = await clearBrandAsset(slot, context.companyId);
+  if (result.error) {
+    throw new Error("Unable to remove brand asset metadata.");
+  }
+
+  await logAuditEvent({
+    companyId: context.companyId,
+    actorUserId: context.userId,
+    action: "brand_asset.removed",
+    entityType: "brand_asset",
+    entityId: slot,
+    beforeState: { objectKey: oldObjectKey },
+    afterState: null,
+    isReversible: false,
+  });
+
+  try {
+    await deleteBrandAsset(oldObjectKey);
+  } catch {
+    // Metadata is authoritative. R2 cleanup can be retried operationally.
+  }
+
+  revalidatePath("/admin/settings/brand");
+  redirect(`/admin/settings/brand?removed=${slot}`);
+}
