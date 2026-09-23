@@ -86,7 +86,11 @@ export default async function CreatorsPage({ searchParams }: Props) {
                 <th>Source</th>
                 <th className="numeric">Followers</th>
                 <th className="numeric">Avg views</th>
-                <th className="numeric">ER</th>
+                <th className="numeric">
+                  <span className="field-label-with-help">
+                    ER <ContextHelp text={adminHelp.engagementRate} label="About engagement rate" />
+                  </span>
+                </th>
                 <th className="numeric">Score</th>
                 <th className="numeric">Updated</th>
               </tr>
@@ -116,7 +120,11 @@ export default async function CreatorsPage({ searchParams }: Props) {
                 <th>Tier</th>
                 <th className="numeric">Followers</th>
                 <th className="numeric">Avg views</th>
-                <th className="numeric">ER</th>
+                <th className="numeric">
+                  <span className="field-label-with-help">
+                    ER <ContextHelp text={adminHelp.engagementRate} label="About engagement rate" />
+                  </span>
+                </th>
                 <th className="numeric">Price (reel)</th>
                 <th className="numeric">Updated</th>
               </tr>
