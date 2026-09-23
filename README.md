@@ -26,3 +26,5 @@ Storyloop platform foundation.
 4. Run `npm run dev`.
 
 The admin area uses Supabase Auth and does not include a service-role key in browser code.
+
+- Admin context-help system — implemented on its development branch
