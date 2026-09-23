@@ -1,4 +1,5 @@
-import { IllustrativeNote } from "@/components/admin/illustrative-note";
+import Link from "next/link";
+
 import { requireAdminContext } from "@/auth/admin-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -38,8 +39,8 @@ export default async function CreatorsPage({ searchParams }: Props) {
       ) : null}
 
       <div className="ops-tabs">
-        <a href="/admin/creators" data-active={tab === "roster"}>Roster</a>
-        <a href="/admin/creators?tab=pool" data-active={tab === "pool"}>Pool</a>
+        <Link href="/admin/creators" data-active={tab === "roster"}>Roster</Link>
+        <Link href="/admin/creators?tab=pool" data-active={tab === "pool"}>Pool</Link>
       </div>
 
       {relationships && relationships.length > 0 ? (
