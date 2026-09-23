@@ -1,5 +1,7 @@
 import { requireAdminContext } from "@/auth/admin-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ContextHelp } from "@/components/admin/context-help";
+import { adminHelp } from "@/help/admin-help";
 
 import { saveTemplate } from "./actions";
 
@@ -75,6 +77,7 @@ export default async function TemplatesPage({ searchParams }: Props) {
                 </label>
                 <span className="template-review-badge">
                   Human review required
+                  <ContextHelp text={adminHelp.humanReview} label="Why human review is required" />
                 </span>
               </div>
             </header>
