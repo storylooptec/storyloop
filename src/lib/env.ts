@@ -10,7 +10,7 @@ function requireEnv(name: string): string {
 
 export function getSupabaseEnv() {
   return {
-    url: requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    publishableKey: requireEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"),
+    url: requireEnv("SUPABASE_URL"),
+    publishableKey: requireEnv("SUPABASE_PUBLISHABLE_KEY"),
   };
 }
