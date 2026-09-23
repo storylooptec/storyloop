@@ -62,7 +62,7 @@ export default async function IntegrationsPage({ searchParams }: Props) {
               <label>
                 <span className="field-label-with-help">
                   State
-                  <ContextHelp text="Disconnected, Mock, Sandbox, Live and Error describe how this provider is currently operating." label="About integration states" />
+                  <ContextHelp text={adminHelp.integrationStates} label="About integration states" />
                 </span>
                 <select
                   name="state"
