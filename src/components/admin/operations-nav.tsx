@@ -1,13 +1,23 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { operationalNavigation } from "@/operations/navigation";
 
 export function OperationsNav() {
+  const pathname = usePathname();
+
   return (
     <div className="operations-bar">
       <nav className="operations-nav" aria-label="Storyloop operations">
         {operationalNavigation.map((item) => (
-          <Link key={item.href} href={item.href} className="operations-nav-link">
+          <Link
+            key={item.href}
+            href={item.href}
+            className="operations-nav-link"
+            aria-current={pathname.startsWith(item.href) ? "page" : undefined}
+          >
             {item.label}
           </Link>
         ))}
