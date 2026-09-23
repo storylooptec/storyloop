@@ -10,6 +10,7 @@ Storyloop platform foundation.
 - Step 4: Company schema + Storyloop seed — implemented on its development branch
 - Step 5: Team / roles / permissions foundation — implemented on its development branch
 - Step 6: Brand & Appearance settings — implemented on its development branch
+- Step 7: Cloudflare R2 upload service + logo upload — implemented on its development branch
 
 ## Local setup
 

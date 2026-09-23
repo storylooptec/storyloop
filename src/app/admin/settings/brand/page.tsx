@@ -2,12 +2,17 @@ import { requireAdminContext } from "@/auth/admin-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 import { saveBrandSettings } from "./actions";
+import { uploadBrandAssetAction } from "./upload-actions";
 
 type Props = {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; uploaded?: string }>;
 };
 
-function objectValue(value: unknown, key: string, fallback: string | number | null) {
+function objectValue(
+  value: unknown,
+  key: string,
+  fallback: string | number | null,
+) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const result = (value as Record<string, unknown>)[key];
     if (typeof result === "string" || typeof result === "number") return result;
@@ -16,10 +21,52 @@ function objectValue(value: unknown, key: string, fallback: string | number | nu
   return fallback;
 }
 
+function assetLabel(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "No file uploaded";
+  }
+
+  const filename = (value as Record<string, unknown>).originalFilename;
+  return typeof filename === "string" && filename ? filename : "Uploaded";
+}
+
+function UploadControl({
+  title,
+  slot,
+  metadata,
+  editable,
+  accept,
+}: {
+  title: string;
+  slot: string;
+  metadata: unknown;
+  editable: boolean;
+  accept: string;
+}) {
+  return (
+    <div className="brand-upload-card">
+      <div>
+        <span className="brand-upload-title">{title}</span>
+        <span className="brand-upload-filename">{assetLabel(metadata)}</span>
+      </div>
+
+      {editable ? (
+        <form action={uploadBrandAssetAction} className="brand-upload-form">
+          <input type="hidden" name="slot" value={slot} />
+          <input name="file" type="file" accept={accept} required />
+          <button className="secondary-button" type="submit">
+            Upload
+          </button>
+        </form>
+      ) : null}
+    </div>
+  );
+}
+
 export default async function BrandSettingsPage({ searchParams }: Props) {
   const context = await requireAdminContext();
   const supabase = await createServerSupabaseClient();
-  const { saved } = await searchParams;
+  const { saved, uploaded } = await searchParams;
 
   const { data: settings } = await supabase
     .from("company_brand_settings")
@@ -56,11 +103,49 @@ export default async function BrandSettingsPage({ searchParams }: Props) {
       </p>
 
       {saved ? <p className="settings-notice">Changes saved.</p> : null}
+      {uploaded ? <p className="settings-notice">Brand asset uploaded.</p> : null}
       {!editable ? (
         <p className="settings-notice">
           Junior access is read-only. Senior approval is required to change brand settings.
         </p>
       ) : null}
+
+      <section className="settings-section settings-assets-section">
+        <h2>Identity assets</h2>
+        <p className="settings-help">
+          Files are stored in Cloudflare R2. Supabase stores only object keys and file metadata.
+        </p>
+        <div className="brand-upload-grid">
+          <UploadControl
+            title="Primary logo"
+            slot="primary_logo"
+            metadata={settings.primary_logo_meta}
+            editable={editable}
+            accept="image/png,image/jpeg,image/webp"
+          />
+          <UploadControl
+            title="Dark logo"
+            slot="dark_logo"
+            metadata={settings.dark_logo_meta}
+            editable={editable}
+            accept="image/png,image/jpeg,image/webp"
+          />
+          <UploadControl
+            title="Light logo"
+            slot="light_logo"
+            metadata={settings.light_logo_meta}
+            editable={editable}
+            accept="image/png,image/jpeg,image/webp"
+          />
+          <UploadControl
+            title="Favicon"
+            slot="favicon"
+            metadata={settings.favicon_meta}
+            editable={editable}
+            accept="image/png,image/x-icon,image/vnd.microsoft.icon"
+          />
+        </div>
+      </section>
 
       <form action={saveBrandSettings} className="settings-form">
         <section className="settings-section">
@@ -73,18 +158,6 @@ export default async function BrandSettingsPage({ searchParams }: Props) {
                 <option value="light">Light</option>
               </select>
             </label>
-            <div className="settings-upload-placeholder">
-              <span>Primary logo</span>
-              <strong>R2 upload activates in Step 7</strong>
-            </div>
-            <div className="settings-upload-placeholder">
-              <span>Dark / light logos</span>
-              <strong>R2 upload activates in Step 7</strong>
-            </div>
-            <div className="settings-upload-placeholder">
-              <span>Favicon</span>
-              <strong>R2 upload activates in Step 7</strong>
-            </div>
           </div>
         </section>
 

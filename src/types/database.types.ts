@@ -49,12 +49,16 @@ export type Database = {
           company_id: string
           dark_colors: Json
           dark_logo_key: string | null
+          dark_logo_meta: Json | null
           default_theme: string
           favicon_key: string | null
+          favicon_meta: Json | null
           gradient: Json
           light_colors: Json
           light_logo_key: string | null
+          light_logo_meta: Json | null
           primary_logo_key: string | null
+          primary_logo_meta: Json | null
           radius: Json
           spacing: number[]
           typography: Json
@@ -64,12 +68,16 @@ export type Database = {
           company_id: string
           dark_colors: Json
           dark_logo_key?: string | null
+          dark_logo_meta?: Json | null
           default_theme?: string
           favicon_key?: string | null
+          favicon_meta?: Json | null
           gradient: Json
           light_colors: Json
           light_logo_key?: string | null
+          light_logo_meta?: Json | null
           primary_logo_key?: string | null
+          primary_logo_meta?: Json | null
           radius?: Json
           spacing?: number[]
           typography: Json
@@ -79,12 +87,16 @@ export type Database = {
           company_id?: string
           dark_colors?: Json
           dark_logo_key?: string | null
+          dark_logo_meta?: Json | null
           default_theme?: string
           favicon_key?: string | null
+          favicon_meta?: Json | null
           gradient?: Json
           light_colors?: Json
           light_logo_key?: string | null
+          light_logo_meta?: Json | null
           primary_logo_key?: string | null
+          primary_logo_meta?: Json | null
           radius?: Json
           spacing?: number[]
           typography?: Json
