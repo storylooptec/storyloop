@@ -13,6 +13,7 @@ Storyloop platform foundation.
 - Step 7: Cloudflare R2 upload service + logo upload — implemented on its development branch
 - Step 8: Configuration / Feature Flags — implemented on its development branch
 - Step 9: Integrations registry + provider mock foundation — implemented on its development branch
+- Step 10: Templates foundation — implemented on its development branch
 
 ## Local setup
 
