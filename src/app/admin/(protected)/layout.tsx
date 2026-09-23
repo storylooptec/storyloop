@@ -19,7 +19,7 @@ const platformItems = [
   { label: "Integrations", href: "/admin/settings/integrations" },
   { label: "Configuration", href: "/admin/settings/configuration" },
   { label: "Templates", href: "/admin/settings/templates" },
-  { label: "Audit / System Logs" },
+  { label: "Audit / System Logs", href: "/admin/settings/audit" },
 ];
 
 const operationsItems = [
