@@ -10,6 +10,8 @@ import {
 } from "@/design-system/theme";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { OperationsNav } from "@/components/admin/operations-nav";
+import { ContextHelp } from "@/components/admin/context-help";
+import { adminHelp } from "@/help/admin-help";
 
 import { signOut } from "./actions";
 
@@ -71,7 +73,13 @@ export default async function AdminProtectedLayout({
       <div className="admin-main">
         <OperationsNav />
         <header className="admin-topbar">
-          <span className="sl-system-label page-eyebrow">{context.role}</span>
+          <span className="admin-role-context">
+            <span className="sl-system-label page-eyebrow">{context.role}</span>
+            <ContextHelp
+              text={context.role === "senior" ? adminHelp.senior : adminHelp.junior}
+              label={`About the ${context.role} role`}
+            />
+          </span>
           <span className="admin-user">{context.email}</span>
           <form action={signOut}>
             <button className="secondary-button" type="submit">
