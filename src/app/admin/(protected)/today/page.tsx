@@ -1,3 +1,4 @@
+import { requireAdminContext } from "@/auth/admin-context";
 import { IllustrativeNote } from "@/components/admin/illustrative-note";
 
 const needsYou = [
@@ -5,13 +6,11 @@ const needsYou = [
     title: "Northstar Beauty — enquiry #214",
     detail: "Reply due · brief already drafted",
     meta: "2h",
-    action: "Review & send",
   },
   {
     title: "Fieldnote deal — brand countered",
     detail: "Draft counter ready",
     meta: "₹12,000",
-    action: "Review draft",
   },
 ];
 
@@ -26,11 +25,11 @@ const later = [
 function QueueGroup({
   title,
   rows,
-  showAction = false,
+  primaryLabel,
 }: {
   title: string;
-  rows: Array<{ title: string; detail: string; meta: string; action?: string }>;
-  showAction?: boolean;
+  rows: Array<{ title: string; detail: string; meta: string }>;
+  primaryLabel?: string;
 }) {
   return (
     <section className="ops-panel">
@@ -44,9 +43,9 @@ function QueueGroup({
               <span>{row.detail}</span>
             </div>
             <span className="queue-meta">{row.meta}</span>
-            {showAction && index === 0 && row.action ? (
-              <button className="primary-button" type="button">
-                {row.action}
+            {index === 0 && primaryLabel ? (
+              <button className={primaryLabel === "Review & send" ? "primary-button" : "secondary-button"} type="button">
+                {primaryLabel}
               </button>
             ) : null}
           </div>
@@ -56,7 +55,10 @@ function QueueGroup({
   );
 }
 
-export default function TodayPage() {
+export default async function TodayPage() {
+  const context = await requireAdminContext();
+  const primaryLabel = context.role === "senior" ? "Review & send" : "Save draft";
+
   return (
     <div className="ops-page">
       <header className="ops-page-header">
@@ -70,7 +72,7 @@ export default function TodayPage() {
         <IllustrativeNote />
       </header>
 
-      <QueueGroup title="Needs you · 2" rows={needsYou} showAction />
+      <QueueGroup title="Needs you · 2" rows={needsYou} primaryLabel={primaryLabel} />
       <QueueGroup title="Waiting on others · 1" rows={waiting} />
       <QueueGroup title="Later · 1" rows={later} />
 
