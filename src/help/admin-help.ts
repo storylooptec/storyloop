@@ -19,6 +19,8 @@ export const adminHelp = {
     "Paid · E means a Paid creator with the Exclusive flag. Exclusive is not a separate tier.",
   candidateScore:
     "Storyloop's candidate ranking score. The score must always be shown with its reason and supporting evidence.",
+  integrationStates:
+    "Disconnected, Mock, Sandbox, Live and Error show how an external provider is currently operating.",
   mock:
     "Uses simulated provider responses so development and QA can continue without a live external service.",
   sandbox:
