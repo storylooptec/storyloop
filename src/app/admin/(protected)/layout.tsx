@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { requireAdminContext } from "@/auth/admin-context";
 
 import { signOut } from "./actions";
 
@@ -30,14 +29,7 @@ export default async function AdminProtectedLayout({
 }: {
   children: ReactNode;
 }) {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/admin/login");
-  }
+  const context = await requireAdminContext();
 
   return (
     <div className="admin-shell">
@@ -71,7 +63,8 @@ export default async function AdminProtectedLayout({
 
       <div className="admin-main">
         <header className="admin-topbar">
-          <span className="admin-user">{user.email}</span>
+          <span className="sl-system-label page-eyebrow">{context.role}</span>
+          <span className="admin-user">{context.email}</span>
           <form action={signOut}>
             <button className="secondary-button" type="submit">
               Sign out
