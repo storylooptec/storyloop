@@ -310,3 +310,67 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+
+.settings-assets-section {
+  margin-top: var(--sl-space-32);
+}
+
+.settings-help {
+  margin: 0 0 var(--sl-space-16);
+  color: var(--sl-slate);
+  font-size: 14px;
+}
+
+.brand-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sl-space-16);
+}
+
+.brand-upload-card {
+  display: grid;
+  gap: var(--sl-space-12);
+  border: 1px solid var(--sl-line);
+  background: var(--sl-surface);
+  padding: var(--sl-space-16);
+}
+
+.brand-upload-card > div {
+  display: grid;
+  gap: var(--sl-space-4);
+}
+
+.brand-upload-title {
+  color: var(--sl-ink);
+  font-weight: var(--sl-weight-title);
+}
+
+.brand-upload-filename {
+  color: var(--sl-slate);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.brand-upload-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sl-space-12);
+  align-items: center;
+}
+
+.brand-upload-form input[type="file"] {
+  min-width: 0;
+  color: var(--sl-body);
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .brand-upload-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-upload-form {
+    grid-template-columns: 1fr;
+  }
+}
