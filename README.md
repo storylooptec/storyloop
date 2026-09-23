@@ -15,6 +15,8 @@ Storyloop platform foundation.
 - Step 9: Integrations registry + provider mock foundation — implemented on its development branch
 - Step 10: Templates foundation — implemented on its development branch
 - Step 11: Audit log foundation — implemented on its development branch
+- Step 12: Agency operations shell and six operational screens — implemented on its development branch
+- Step 12: Agency operational navigation/screens — implemented on its development branch
 
 ## Local setup
 
