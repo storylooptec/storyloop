@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { permissions } from "@/auth/permissions";
+import { logAuditEvent } from "@/audit/log-event";
 import { requirePermission } from "@/auth/require-permission";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -35,6 +36,12 @@ function nullableNumber(formData: FormData, name: string): number | null {
 export async function saveBrandSettings(formData: FormData) {
   const context = await requirePermission(permissions.approvalsPerform);
   const supabase = await createServerSupabaseClient();
+
+  const { data: before } = await supabase
+    .from("company_brand_settings")
+    .select("default_theme,dark_colors,light_colors,gradient,typography,radius,spacing")
+    .eq("company_id", context.companyId)
+    .single();
 
   const defaultTheme =
     String(formData.get("defaultTheme")) === "light" ? "light" : "dark";
@@ -124,6 +131,26 @@ export async function saveBrandSettings(formData: FormData) {
     .eq("company_id", context.companyId);
 
   if (error) throw new Error("Unable to save brand settings");
+
+  await logAuditEvent({
+    companyId: context.companyId,
+    actorUserId: context.userId,
+    action: "brand_settings.updated",
+    entityType: "company_brand_settings",
+    entityId: context.companyId,
+    beforeState: before,
+    afterState: {
+      default_theme: defaultTheme,
+      dark_colors: darkColors,
+      light_colors: lightColors,
+      gradient,
+      typography,
+      radius,
+      spacing,
+    },
+    isReversible: true,
+    undoActionKey: "brand_settings.restore",
+  });
 
   revalidatePath("/admin", "layout");
   revalidatePath("/admin/settings/brand");
