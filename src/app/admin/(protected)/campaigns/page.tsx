@@ -57,6 +57,29 @@ export default async function CampaignsPage() {
           <button className="secondary-button" type="button">Save draft</button>
         )}
       </section>
+
+      <section className="ops-panel campaign-run">
+        <div className="ops-panel-heading sl-system-label">Campaign run · illustrative</div>
+        <div className="campaign-run-grid">
+          <div>
+            <span>Kit</span>
+            <strong>Deliverables · tracking links · promo codes ready</strong>
+          </div>
+          <div>
+            <span>Scheduler</span>
+            <strong>5 creators · dates prepared</strong>
+          </div>
+          <div>
+            <span>Pre-live</span>
+            <strong>Disclosure check required before sign-off</strong>
+          </div>
+          <div>
+            <span>Reporting</span>
+            <strong>Weekly desk refresh · rupees first</strong>
+          </div>
+        </div>
+        <p className="provenance">Phase 1 reporting is refreshed weekly by the desk · no automation implied</p>
+      </section>
     </div>
   );
 }
