@@ -71,9 +71,9 @@ export function toCssVariables(tokens: StoryloopTokens): Record<string, string> 
     "--sl-weight-body": String(typography.bodyWeight),
     "--sl-weight-system": String(typography.systemWeight),
     "--sl-system-tracking": typography.systemLetterSpacing,
-    "--sl-radius-sm": `${radius.sm}px`,
-    "--sl-radius-md": `${radius.md}px`,
-    "--sl-radius-lg": `${radius.lg}px`,
+    ...(radius.sm == null ? {} : { "--sl-radius-sm": `${radius.sm}px` }),
+    ...(radius.md == null ? {} : { "--sl-radius-md": `${radius.md}px` }),
+    ...(radius.lg == null ? {} : { "--sl-radius-lg": `${radius.lg}px` }),
     ...Object.fromEntries(
       spacing.map((value) => [`--sl-space-${value}`, `${value}px`]),
     ),
