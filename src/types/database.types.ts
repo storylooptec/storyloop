@@ -44,6 +44,62 @@ export type Database = {
         }
         Relationships: []
       }
+      company_brand_settings: {
+        Row: {
+          company_id: string
+          dark_colors: Json
+          dark_logo_key: string | null
+          default_theme: string
+          favicon_key: string | null
+          gradient: Json
+          light_colors: Json
+          light_logo_key: string | null
+          primary_logo_key: string | null
+          radius: Json
+          spacing: number[]
+          typography: Json
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          dark_colors: Json
+          dark_logo_key?: string | null
+          default_theme?: string
+          favicon_key?: string | null
+          gradient: Json
+          light_colors: Json
+          light_logo_key?: string | null
+          primary_logo_key?: string | null
+          radius?: Json
+          spacing?: number[]
+          typography: Json
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          dark_colors?: Json
+          dark_logo_key?: string | null
+          default_theme?: string
+          favicon_key?: string | null
+          gradient?: Json
+          light_colors?: Json
+          light_logo_key?: string | null
+          primary_logo_key?: string | null
+          radius?: Json
+          spacing?: number[]
+          typography?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_brand_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_creators: {
         Row: {
           commercial_relationship: string | null
