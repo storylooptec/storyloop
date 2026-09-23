@@ -97,7 +97,12 @@ export default async function DiscoverPage() {
               <dl className="candidate-metrics">
                 <div><dt>Audience</dt><dd>{candidate.audience}</dd></div>
                 <div><dt>Avg views</dt><dd>{candidate.views}</dd></div>
-                <div><dt>ER</dt><dd>{candidate.er}</dd></div>
+                <div>
+                  <dt className="field-label-with-help">
+                    ER <ContextHelp text={adminHelp.engagementRate} label="About engagement rate" />
+                  </dt>
+                  <dd>{candidate.er}</dd>
+                </div>
                 <div><dt>Last active</dt><dd>{candidate.active}</dd></div>
               </dl>
               <p className="candidate-reason">{candidate.reason}</p>
