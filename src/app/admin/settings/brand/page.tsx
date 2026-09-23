@@ -1,5 +1,7 @@
 import { requireAdminContext } from "@/auth/admin-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ContextHelp } from "@/components/admin/context-help";
+import { adminHelp } from "@/help/admin-help";
 
 import { saveBrandSettings } from "./actions";
 import { uploadBrandAssetAction } from "./upload-actions";
@@ -229,7 +231,10 @@ export default async function BrandSettingsPage({ searchParams }: Props) {
         </section>
 
         <section className="settings-section">
-          <h2>Radius & spacing</h2>
+          <h2 className="heading-with-help">
+            Radius & spacing
+            <ContextHelp text={adminHelp.systemField} label="About design-system token fields" />
+          </h2>
           <div className="settings-grid">
             <label>Radius small<input name="radiusSm" type="number" defaultValue={objectValue(settings.radius, "sm", null) ?? ""} disabled={!editable}/></label>
             <label>Radius medium<input name="radiusMd" type="number" defaultValue={objectValue(settings.radius, "md", null) ?? ""} disabled={!editable}/></label>
