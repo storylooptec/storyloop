@@ -17,7 +17,7 @@ const platformItems = [
   { label: "Team & Roles" },
   { label: "Brand & Appearance", href: "/admin/settings/brand" },
   { label: "Integrations" },
-  { label: "Configuration" },
+  { label: "Configuration", href: "/admin/settings/configuration" },
   { label: "Templates" },
   { label: "Audit / System Logs" },
 ];

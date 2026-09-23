@@ -112,6 +112,53 @@ export type Database = {
           },
         ]
       }
+      company_configuration: {
+        Row: {
+          category: string
+          company_id: string
+          description: string | null
+          id: string
+          is_tbd: boolean
+          key: string
+          label: string
+          updated_at: string
+          value: Json | null
+          value_type: Database["public"]["Enums"]["configuration_value_type"]
+        }
+        Insert: {
+          category: string
+          company_id: string
+          description?: string | null
+          id?: string
+          is_tbd?: boolean
+          key: string
+          label: string
+          updated_at?: string
+          value?: Json | null
+          value_type: Database["public"]["Enums"]["configuration_value_type"]
+        }
+        Update: {
+          category?: string
+          company_id?: string
+          description?: string | null
+          id?: string
+          is_tbd?: boolean
+          key?: string
+          label?: string
+          updated_at?: string
+          value?: Json | null
+          value_type?: Database["public"]["Enums"]["configuration_value_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_configuration_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_creators: {
         Row: {
           commercial_relationship: string | null
@@ -251,6 +298,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      configuration_value_type: "boolean" | "integer" | "number" | "string"
       team_role: "junior" | "senior"
     }
     CompositeTypes: {
@@ -379,6 +427,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      configuration_value_type: ["boolean", "integer", "number", "string"],
       team_role: ["junior", "senior"],
     },
   },
