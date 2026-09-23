@@ -9,6 +9,7 @@ import {
   toCssVariables,
 } from "@/design-system/theme";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { OperationsNav } from "@/components/admin/operations-nav";
 
 import { signOut } from "./actions";
 
@@ -20,15 +21,6 @@ const platformItems = [
   { label: "Configuration", href: "/admin/settings/configuration" },
   { label: "Templates", href: "/admin/settings/templates" },
   { label: "Audit / System Logs", href: "/admin/settings/audit" },
-];
-
-const operationsItems = [
-  "Today",
-  "Creators",
-  "Discover",
-  "Brands",
-  "Campaigns",
-  "Money",
 ];
 
 export default async function AdminProtectedLayout({
@@ -74,19 +66,10 @@ export default async function AdminProtectedLayout({
           </nav>
         </section>
 
-        <section className="admin-section">
-          <div className="sl-system-label page-eyebrow">Operations</div>
-          <nav className="admin-nav" aria-label="Storyloop operations">
-            {operationsItems.map((item) => (
-              <span className="admin-nav-item" key={item} aria-disabled="true">
-                {item}
-              </span>
-            ))}
-          </nav>
-        </section>
       </aside>
 
       <div className="admin-main">
+        <OperationsNav />
         <header className="admin-topbar">
           <span className="sl-system-label page-eyebrow">{context.role}</span>
           <span className="admin-user">{context.email}</span>
