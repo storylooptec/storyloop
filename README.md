@@ -14,6 +14,7 @@ Storyloop platform foundation.
 - Step 8: Configuration / Feature Flags — implemented on its development branch
 - Step 9: Integrations registry + provider mock foundation — implemented on its development branch
 - Step 10: Templates foundation — implemented on its development branch
+- Step 11: Audit log foundation — implemented on its development branch
 
 ## Local setup
 
