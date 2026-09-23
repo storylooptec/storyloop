@@ -9,6 +9,7 @@ Storyloop platform foundation.
 - Step 3: authenticated `/admin` shell — implemented on its development branch
 - Step 4: Company schema + Storyloop seed — implemented on its development branch
 - Step 5: Team / roles / permissions foundation — implemented on its development branch
+- Step 6: Brand & Appearance settings — implemented on its development branch
 
 ## Local setup
 
