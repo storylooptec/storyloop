@@ -210,6 +210,50 @@ export type Database = {
           },
         ]
       }
+      company_integrations: {
+        Row: {
+          category: string
+          company_id: string
+          id: string
+          label: string
+          non_secret_config: Json
+          provider_key: string
+          state: Database["public"]["Enums"]["integration_state"]
+          status_message: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          company_id: string
+          id?: string
+          label: string
+          non_secret_config?: Json
+          provider_key: string
+          state?: Database["public"]["Enums"]["integration_state"]
+          status_message?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          company_id?: string
+          id?: string
+          label?: string
+          non_secret_config?: Json
+          provider_key?: string
+          state?: Database["public"]["Enums"]["integration_state"]
+          status_message?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_integrations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creators: {
         Row: {
           created_at: string
@@ -299,6 +343,7 @@ export type Database = {
     }
     Enums: {
       configuration_value_type: "boolean" | "integer" | "number" | "string"
+      integration_state: "disconnected" | "mock" | "sandbox" | "live" | "error"
       team_role: "junior" | "senior"
     }
     CompositeTypes: {
@@ -428,6 +473,7 @@ export const Constants = {
   public: {
     Enums: {
       configuration_value_type: ["boolean", "integer", "number", "string"],
+      integration_state: ["disconnected", "mock", "sandbox", "live", "error"],
       team_role: ["junior", "senior"],
     },
   },
