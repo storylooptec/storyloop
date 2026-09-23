@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { permissions } from "@/auth/permissions";
+import { logAuditEvent } from "@/audit/log-event";
 import { requirePermission } from "@/auth/require-permission";
 import {
   BRAND_ASSET_SLOTS,
@@ -88,6 +89,22 @@ export async function uploadBrandAssetAction(formData: FormData) {
 
     throw new Error("Upload completed, but metadata could not be saved.");
   }
+
+  await logAuditEvent({
+    companyId: context.companyId,
+    actorUserId: context.userId,
+    action: "brand_asset.uploaded",
+    entityType: "brand_asset",
+    entityId: slot,
+    beforeState: oldObjectKey ? { objectKey: oldObjectKey } : null,
+    afterState: {
+      objectKey: uploaded.objectKey,
+      contentType: uploaded.contentType,
+      sizeBytes: uploaded.sizeBytes,
+      originalFilename: uploaded.originalFilename,
+    },
+    isReversible: false,
+  });
 
   if (oldObjectKey && oldObjectKey !== uploaded.objectKey) {
     try {
