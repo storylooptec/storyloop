@@ -24,6 +24,8 @@ Navigation, layouts, permissions, workflow states, page hierarchy and business l
 
 Runtime overrides should eventually be loaded from Storyloop company configuration in Supabase. The database must store non-secret configuration only. Defaults remain in code so the product always has a deterministic fallback.
 
+Radius token values are intentionally `null` for now because the supplied Storyloop material does not define them. They remain configurable/TBD rather than being invented.
+
 ## Typography
 
 - Montserrat: display, titles and body.
