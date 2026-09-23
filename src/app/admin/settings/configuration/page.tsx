@@ -84,7 +84,10 @@ export default async function ConfigurationPage({ searchParams }: Props) {
                       ) : null}
                     </div>
                     {item.description ? <p>{item.description}</p> : null}
-                    <code>{item.key}</code>
+                    <span className="technical-field">
+                      <code>{item.key}</code>
+                      <ContextHelp text={adminHelp.systemField} label="About this system field" />
+                    </span>
                   </div>
 
                   <div className="configuration-editor">
