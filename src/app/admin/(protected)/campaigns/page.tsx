@@ -1,9 +1,12 @@
+import { requireAdminContext } from "@/auth/admin-context";
 import { IllustrativeNote } from "@/components/admin/illustrative-note";
 import { StateRail } from "@/components/admin/state-rail";
 
 const columns = ["Brief", "Shortlist", "Approved", "Funded", "Live", "Paid"];
 
-export default function CampaignsPage() {
+export default async function CampaignsPage() {
+  const context = await requireAdminContext();
+  const senior = context.role === "senior";
   return (
     <div className="ops-page">
       <header className="ops-page-header">
@@ -48,7 +51,11 @@ export default function CampaignsPage() {
           <span>④ Contracts</span>
           <span>⑤ Kit</span>
         </div>
-        <button className="primary-button" type="button">Review & send</button>
+        {senior ? (
+          <button className="primary-button" type="button">Review & send</button>
+        ) : (
+          <button className="secondary-button" type="button">Save draft</button>
+        )}
       </section>
     </div>
   );
