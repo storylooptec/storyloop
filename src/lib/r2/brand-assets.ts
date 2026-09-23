@@ -1,4 +1,7 @@
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  PutObjectCommand,
+} from "@aws-sdk/client-s3";
 import { randomUUID } from "node:crypto";
 
 import { getR2Client } from "@/lib/r2/client";
@@ -38,7 +41,48 @@ function sanitizeBaseName(filename: string): string {
     .replace(/[^a-zA-Z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .toLowerCase();
+
   return safe.slice(0, 60) || "asset";
+}
+
+function hasExpectedSignature(contentType: string, bytes: Uint8Array): boolean {
+  if (contentType === "image/png") {
+    return (
+      bytes.length >= 8 &&
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47 &&
+      bytes[4] === 0x0d &&
+      bytes[5] === 0x0a &&
+      bytes[6] === 0x1a &&
+      bytes[7] === 0x0a
+    );
+  }
+
+  if (contentType === "image/jpeg") {
+    return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+
+  if (contentType === "image/webp") {
+    return (
+      bytes.length >= 12 &&
+      String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
+      String.fromCharCode(...bytes.slice(8, 12)) === "WEBP"
+    );
+  }
+
+  if (contentType === "image/x-icon" || contentType === "image/vnd.microsoft.icon") {
+    return (
+      bytes.length >= 4 &&
+      bytes[0] === 0x00 &&
+      bytes[1] === 0x00 &&
+      bytes[2] === 0x01 &&
+      bytes[3] === 0x00
+    );
+  }
+
+  return false;
 }
 
 export async function uploadBrandAsset(input: {
@@ -56,6 +100,12 @@ export async function uploadBrandAsset(input: {
     throw new Error("File must be between 1 byte and 5 MB.");
   }
 
+  const body = Buffer.from(await input.file.arrayBuffer());
+
+  if (!hasExpectedSignature(input.file.type, body)) {
+    throw new Error("File contents do not match the declared image type.");
+  }
+
   const safeName = sanitizeBaseName(input.file.name);
   const objectKey = [
     "companies",
@@ -65,7 +115,6 @@ export async function uploadBrandAsset(input: {
     `${Date.now()}-${randomUUID()}-${safeName}.${extension}`,
   ].join("/");
 
-  const body = Buffer.from(await input.file.arrayBuffer());
   const config = getR2Config();
 
   await getR2Client().send(
@@ -87,4 +136,15 @@ export async function uploadBrandAsset(input: {
       ? `${config.publicBaseUrl.replace(/\/$/, "")}/${objectKey}`
       : null,
   };
+}
+
+export async function deleteBrandAsset(objectKey: string): Promise<void> {
+  const config = getR2Config();
+
+  await getR2Client().send(
+    new DeleteObjectCommand({
+      Bucket: config.bucket,
+      Key: objectKey,
+    }),
+  );
 }
