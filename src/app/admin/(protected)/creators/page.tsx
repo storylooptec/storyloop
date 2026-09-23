@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { requireAdminContext } from "@/auth/admin-context";
 import { IllustrativeNote } from "@/components/admin/illustrative-note";
+import { ContextHelp } from "@/components/admin/context-help";
+import { adminHelp } from "@/help/admin-help";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type Props = {
@@ -65,8 +67,14 @@ export default async function CreatorsPage({ searchParams }: Props) {
       ) : null}
 
       <div className="ops-tabs">
-        <Link href="/admin/creators" data-active={tab === "roster"}>Roster</Link>
-        <Link href="/admin/creators?tab=pool" data-active={tab === "pool"}>Pool</Link>
+        <span className="tab-with-help">
+          <Link href="/admin/creators" data-active={tab === "roster"}>Roster</Link>
+          <ContextHelp text={adminHelp.roster} label="About the Roster" />
+        </span>
+        <span className="tab-with-help">
+          <Link href="/admin/creators?tab=pool" data-active={tab === "pool"}>Pool</Link>
+          <ContextHelp text={adminHelp.pool} label="About the Pool" />
+        </span>
       </div>
 
       {tab === "pool" ? (
