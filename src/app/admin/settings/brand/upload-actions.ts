@@ -7,6 +7,7 @@ import { permissions } from "@/auth/permissions";
 import { requirePermission } from "@/auth/require-permission";
 import {
   BRAND_ASSET_SLOTS,
+  deleteBrandAsset,
   type BrandAssetSlot,
   uploadBrandAsset,
 } from "@/lib/r2/brand-assets";
@@ -43,19 +44,32 @@ export async function uploadBrandAssetAction(formData: FormData) {
     throw new Error("A file is required");
   }
 
+  const supabase = await createServerSupabaseClient();
+  const keyColumn = keyColumnBySlot[slot];
+  const metadataColumn = metadataColumnBySlot[slot];
+
+  const { data: current } = await supabase
+    .from("company_brand_settings")
+    .select(keyColumn)
+    .eq("company_id", context.companyId)
+    .single();
+
+  const oldObjectKey =
+    current && typeof current[keyColumn] === "string"
+      ? current[keyColumn]
+      : null;
+
   const uploaded = await uploadBrandAsset({
     companyId: context.companyId,
     slot,
     file,
   });
 
-  const supabase = await createServerSupabaseClient();
-
   const { error } = await supabase
     .from("company_brand_settings")
     .update({
-      [keyColumnBySlot[slot]]: uploaded.objectKey,
-      [metadataColumnBySlot[slot]]: {
+      [keyColumn]: uploaded.objectKey,
+      [metadataColumn]: {
         contentType: uploaded.contentType,
         sizeBytes: uploaded.sizeBytes,
         originalFilename: uploaded.originalFilename,
@@ -65,7 +79,23 @@ export async function uploadBrandAssetAction(formData: FormData) {
     })
     .eq("company_id", context.companyId);
 
-  if (error) throw new Error("Upload completed, but metadata could not be saved.");
+  if (error) {
+    try {
+      await deleteBrandAsset(uploaded.objectKey);
+    } catch {
+      // Best-effort cleanup. Never hide the metadata-write failure.
+    }
+
+    throw new Error("Upload completed, but metadata could not be saved.");
+  }
+
+  if (oldObjectKey && oldObjectKey !== uploaded.objectKey) {
+    try {
+      await deleteBrandAsset(oldObjectKey);
+    } catch {
+      // Replacement succeeded. Old-object cleanup can be retried operationally.
+    }
+  }
 
   revalidatePath("/admin/settings/brand");
   redirect(`/admin/settings/brand?uploaded=${slot}`);
