@@ -1,5 +1,7 @@
 import { requireAdminContext } from "@/auth/admin-context";
 import { IllustrativeNote } from "@/components/admin/illustrative-note";
+import { ContextHelp } from "@/components/admin/context-help";
+import { adminHelp } from "@/help/admin-help";
 
 const candidates = [
   {
@@ -54,14 +56,20 @@ export default async function DiscoverPage() {
             <span className="query-chip">street style ×</span>
             <span className="query-chip">indian labels ×</span>
           </div>
-          <p className="provenance">Official social APIs · hosted search · RSS · checked today · confidence high</p>
+          <p className="provenance">
+            Official social APIs · hosted search · RSS · checked today · confidence high
+            <ContextHelp text={adminHelp.provenance} label="About provenance" />
+          </p>
         </div>
 
         <div className="run-meter">
           <div><span>Found</span><strong>118</strong></div>
           <div><span>Deduped</span><strong>74</strong></div>
           <div><span>Enriched</span><strong>22</strong></div>
-          <div><span>Spend</span><strong>₹142 / TBD cap</strong></div>
+          <div>
+            <span className="field-label-with-help">Spend <ContextHelp text={adminHelp.discoveryCap} label="About the discovery cap" /></span>
+            <strong>₹142 / TBD cap</strong>
+          </div>
         </div>
 
         <button className="primary-button" type="button">Run discovery</button>
@@ -78,6 +86,10 @@ export default async function DiscoverPage() {
                   <span>{candidate.handle}</span>
                 </div>
                 <div className="candidate-score">
+                  <span className="field-label-with-help">
+                    Score
+                    <ContextHelp text={adminHelp.candidateScore} label="About Storyloop score" />
+                  </span>
                   <strong>{candidate.score}</strong>
                   <span>High confidence</span>
                 </div>
