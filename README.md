@@ -7,6 +7,7 @@ Storyloop platform foundation.
 - Step 1: repository audit — complete
 - Step 2: shared design-token system — implemented
 - Step 3: authenticated `/admin` shell — implemented on its development branch
+- Step 4: Company schema + Storyloop seed — implemented on its development branch
 
 ## Local setup
 
