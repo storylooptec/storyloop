@@ -1,5 +1,7 @@
 import { requireAdminContext } from "@/auth/admin-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ContextHelp } from "@/components/admin/context-help";
+import { adminHelp } from "@/help/admin-help";
 
 import { saveIntegrationState } from "./actions";
 
@@ -31,6 +33,11 @@ export default async function IntegrationsPage({ searchParams }: Props) {
         Provider registry and operating mode. Secrets remain in server environment
         variables; this screen stores only non-secret configuration and state.
       </p>
+      <div className="integration-state-help" aria-label="Integration state help">
+        <span>Mock <ContextHelp text={adminHelp.mock} label="What Mock means" /></span>
+        <span>Sandbox <ContextHelp text={adminHelp.sandbox} label="What Sandbox means" /></span>
+        <span>Live <ContextHelp text={adminHelp.live} label="What Live means" /></span>
+      </div>
 
       {saved ? <p className="settings-notice">Integration state saved.</p> : null}
 
@@ -53,7 +60,10 @@ export default async function IntegrationsPage({ searchParams }: Props) {
 
             <div className="integration-state-control">
               <label>
-                State
+                <span className="field-label-with-help">
+                  State
+                  <ContextHelp text="Disconnected, Mock, Sandbox, Live and Error describe how this provider is currently operating." label="About integration states" />
+                </span>
                 <select
                   name="state"
                   defaultValue={integration.state}
