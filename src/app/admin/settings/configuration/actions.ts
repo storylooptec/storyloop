@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { permissions } from "@/auth/permissions";
+import { logAuditEvent } from "@/audit/log-event";
 import { requirePermission } from "@/auth/require-permission";
 import {
   configurationKeys,
@@ -52,6 +53,13 @@ export async function saveConfigurationItem(formData: FormData) {
   const value = isTbd ? null : parseValue(valueType, rawValue);
   const supabase = await createServerSupabaseClient();
 
+  const { data: before } = await supabase
+    .from("company_configuration")
+    .select("value,is_tbd")
+    .eq("company_id", context.companyId)
+    .eq("key", key)
+    .single();
+
   const { error } = await supabase
     .from("company_configuration")
     .update({
@@ -63,6 +71,18 @@ export async function saveConfigurationItem(formData: FormData) {
     .eq("key", key);
 
   if (error) throw new Error("Unable to save configuration");
+
+  await logAuditEvent({
+    companyId: context.companyId,
+    actorUserId: context.userId,
+    action: "configuration.updated",
+    entityType: "company_configuration",
+    entityId: key,
+    beforeState: before,
+    afterState: { value, is_tbd: isTbd },
+    isReversible: true,
+    undoActionKey: "configuration.restore",
+  });
 
   revalidatePath("/admin/settings/configuration");
   redirect("/admin/settings/configuration?saved=1");
