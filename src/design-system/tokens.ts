@@ -31,9 +31,9 @@ export type StoryloopTokens = {
     systemLetterSpacing: string;
   };
   radius: {
-    sm: number;
-    md: number;
-    lg: number;
+    sm: number | null;
+    md: number | null;
+    lg: number | null;
   };
   spacing: readonly number[];
 };
@@ -70,9 +70,9 @@ export const storyloopTokens: Record<ThemeName, StoryloopTokens> = {
       systemLetterSpacing: "0.1em",
     },
     radius: {
-      sm: 6,
-      md: 10,
-      lg: 16,
+      sm: null,
+      md: null,
+      lg: null,
     },
     spacing: [4, 8, 12, 16, 20, 24, 32, 40, 48, 64],
   },
@@ -106,9 +106,9 @@ export const storyloopTokens: Record<ThemeName, StoryloopTokens> = {
       systemLetterSpacing: "0.1em",
     },
     radius: {
-      sm: 6,
-      md: 10,
-      lg: 16,
+      sm: null,
+      md: null,
+      lg: null,
     },
     spacing: [4, 8, 12, 16, 20, 24, 32, 40, 48, 64],
   },
