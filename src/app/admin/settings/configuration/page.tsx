@@ -1,5 +1,7 @@
 import { requireAdminContext } from "@/auth/admin-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ContextHelp } from "@/components/admin/context-help";
+import { adminHelp } from "@/help/admin-help";
 
 import { saveConfigurationItem } from "./actions";
 
@@ -40,7 +42,10 @@ export default async function ConfigurationPage({ searchParams }: Props) {
   return (
     <>
       <p className="sl-system-label page-eyebrow">Platform / Configuration</p>
-      <h1 className="page-title">Configuration</h1>
+      <div className="page-title-with-help">
+        <h1 className="page-title">Configuration</h1>
+        <ContextHelp text={adminHelp.configurationValue} label="About configuration values" />
+      </div>
       <p className="page-copy">
         Product rules and feature switches that should change without a code deploy.
         Unresolved product decisions stay explicitly marked TBD.
@@ -72,7 +77,10 @@ export default async function ConfigurationPage({ searchParams }: Props) {
                     <div className="configuration-title-line">
                       <strong>{item.label}</strong>
                       {item.is_tbd ? (
-                        <span className="configuration-tbd sl-system-label">TBD</span>
+                        <span className="inline-help-label">
+                          <span className="configuration-tbd sl-system-label">TBD</span>
+                          <ContextHelp text={adminHelp.tbd} label="What TBD means" />
+                        </span>
                       ) : null}
                     </div>
                     {item.description ? <p>{item.description}</p> : null}
