@@ -1,2 +1,18 @@
-# storyloop
-agencybrandcreator
+# Storyloop
+
+Storyloop platform foundation.
+
+## Current build status
+
+- Step 1: repository audit — complete
+- Step 2: shared design-token system — implemented
+- Step 3: authenticated `/admin` shell — implemented on its development branch
+
+## Local setup
+
+1. Install dependencies with `npm install`.
+2. Copy `.env.example` to `.env.local`.
+3. Add the Supabase project URL and publishable key.
+4. Run `npm run dev`.
+
+The admin area uses Supabase Auth and does not include a service-role key in browser code.
