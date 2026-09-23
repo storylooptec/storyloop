@@ -37,7 +37,10 @@ export default async function MoneyPage() {
       </section>
 
       <section className="ops-panel">
-        <div className="ops-panel-heading sl-system-label">Payout run · 25 Sep</div>
+        <div className="ops-panel-heading sl-system-label field-label-with-help">
+          Payout run · 25 Sep
+          <ContextHelp text={adminHelp.kyc} label="About KYC in payout runs" />
+        </div>
         <div className="simple-rows money-rows">
           <div><span>Creator A · ₹15,000 · KYC ✓</span></div>
           <div><span>Creator B · ₹30,000 · KYC ✓</span></div>
