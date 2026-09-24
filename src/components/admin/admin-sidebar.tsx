@@ -26,6 +26,7 @@ const sections = [
       { label: "Company", href: "/admin/settings/company" },
       { label: "Team & Roles", href: "/admin/settings/team" },
       { label: "Experiences", href: "/admin/settings/experiences" },
+      { label: "Creator Experience", href: "/admin/settings/creator-experience" },
       { label: "Brand & Appearance", href: "/admin/settings/brand" },
       { label: "Integrations", href: "/admin/settings/integrations" },
       { label: "Configuration", href: "/admin/settings/configuration" },
