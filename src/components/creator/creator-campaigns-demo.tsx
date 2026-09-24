@@ -12,7 +12,7 @@ const options = [
   { value: "empty", label: "Empty" },
 ] as const;
 
-export function CreatorCampaignsDemo() {
+export function CreatorCampaignsDemo({ cms = {} }: { cms?: Record<string, string> }) {
   const [state, setState] = useState<CampaignState>("active");
 
   return (
@@ -62,8 +62,8 @@ export function CreatorCampaignsDemo() {
 
       {state === "empty" ? (
         <section className="creator-empty-feed">
-          <h2>No briefs yet.</h2>
-          <p>Your card is live — brands in Fitness · Mumbai can already see it. A sharper card gets picked more.</p>
+          <h2>{cms.campaigns_empty_title ?? "No briefs yet."}</h2>
+          <p>{cms.campaigns_empty_body ?? "Your card is live — brands in Fitness · Mumbai can already see it. A sharper card gets picked more."}</p>
           <Link className="creator-secondary creator-inline-button" href="/creator/me">Review my card</Link>
         </section>
       ) : null}
