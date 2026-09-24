@@ -395,6 +395,189 @@ export type Database = {
           },
         ]
       }
+      creator_accounts: {
+        Row: {
+          company_id: string
+          created_at: string
+          creator_id: string
+          entitlement_state: Json
+          onboarding_completed: boolean
+          onboarding_data: Json
+          onboarding_step: number
+          phone: string | null
+          preferences: Json
+          tier: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          creator_id: string
+          entitlement_state?: Json
+          onboarding_completed?: boolean
+          onboarding_data?: Json
+          onboarding_step?: number
+          phone?: string | null
+          preferences?: Json
+          tier?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          creator_id?: string
+          entitlement_state?: Json
+          onboarding_completed?: boolean
+          onboarding_data?: Json
+          onboarding_step?: number
+          phone?: string | null
+          preferences?: Json
+          tier?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_accounts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_accounts_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: true
+            referencedRelation: "creators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_create_usage: {
+        Row: {
+          captions_used: number
+          creator_id: string
+          hashtags_used: number
+          id: string
+          month_start: string
+          updated_at: string
+        }
+        Insert: {
+          captions_used?: number
+          creator_id: string
+          hashtags_used?: number
+          id?: string
+          month_start: string
+          updated_at?: string
+        }
+        Update: {
+          captions_used?: number
+          creator_id?: string
+          hashtags_used?: number
+          id?: string
+          month_start?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_create_usage_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_social_accounts: {
+        Row: {
+          created_at: string
+          creator_id: string
+          handle: string | null
+          id: string
+          is_primary: boolean
+          metadata: Json
+          platform: string | null
+          profile_url: string
+          updated_at: string
+          verification_status: string
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          handle?: string | null
+          id?: string
+          is_primary?: boolean
+          metadata?: Json
+          platform?: string | null
+          profile_url: string
+          updated_at?: string
+          verification_status?: string
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          handle?: string | null
+          id?: string
+          is_primary?: boolean
+          metadata?: Json
+          platform?: string | null
+          profile_url?: string
+          updated_at?: string
+          verification_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_social_accounts_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_studio_profiles: {
+        Row: {
+          consent_scope: string | null
+          consented_at: string | null
+          creator_id: string
+          model_status: string
+          photos_captured: number
+          setup_status: string
+          updated_at: string
+          voice_captured: boolean
+        }
+        Insert: {
+          consent_scope?: string | null
+          consented_at?: string | null
+          creator_id: string
+          model_status?: string
+          photos_captured?: number
+          setup_status?: string
+          updated_at?: string
+          voice_captured?: boolean
+        }
+        Update: {
+          consent_scope?: string | null
+          consented_at?: string | null
+          creator_id?: string
+          model_status?: string
+          photos_captured?: number
+          setup_status?: string
+          updated_at?: string
+          voice_captured?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_studio_profiles_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: true
+            referencedRelation: "creators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creators: {
         Row: {
           created_at: string
@@ -480,7 +663,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      complete_creator_onboarding: { Args: never; Returns: string }
+      ensure_creator_account: {
+        Args: { p_phone?: string; p_source?: string }
+        Returns: string
+      }
+      get_creator_configuration: {
+        Args: never
+        Returns: {
+          is_tbd: boolean
+          key: string
+          label: string
+          value: Json
+        }[]
+      }
     }
     Enums: {
       audit_event_status: "success" | "failed"
