@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - creator-rebuild-check
 
 jobs:
   verify:
