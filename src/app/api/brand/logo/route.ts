@@ -33,8 +33,9 @@ export async function GET(request: Request) {
     if (!result.Body) return new Response("Logo unavailable", { status: 404 });
 
     const bytes = await result.Body.transformToByteArray();
+    const body = Uint8Array.from(bytes).buffer;
 
-    return new Response(bytes, {
+    return new Response(body, {
       headers: {
         "Content-Type": result.ContentType ?? "image/webp",
         "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
