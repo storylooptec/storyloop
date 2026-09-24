@@ -12,7 +12,7 @@ const options = [
   { value: "exclusive", label: "Exclusive" },
 ] as const;
 
-export function CreatorMeDemo() {
+export function CreatorMeDemo({ cms = {} }: { cms?: Record<string, string> }) {
   const [state, setState] = useState<MeState>("card");
 
   return (
@@ -40,7 +40,7 @@ export function CreatorMeDemo() {
             <p>Voice ✓ face ✓ · 2 brands allowed · 6 demos ever generated</p>
             <button className="creator-danger">Revoke — immediate</button>
           </section>
-          <button className="creator-primary">Share my media kit</button>
+          <button className="creator-primary">{cms.me_media_kit_label ?? "Share my media kit"}</button>
           <section className="creator-me-secondary-grid">
             {["Campaign history","Brand memory","Earnings by brand/month","Peer benchmark","Notifications","Language · 5 Indian languages","Delist","Export data"].map((item)=><button className="creator-secondary" key={item}>{item}</button>)}
           </section>
