@@ -1,9 +1,13 @@
 import { CreatorOnboardingFlow } from "@/components/creator/creator-onboarding-flow";
+import { getCreatorAuthMode } from "@/creator/auth-mode";
 import { configByKey, getCreatorConfiguration } from "@/creator/config";
 import { getCreatorContext } from "@/creator/context";
 
 export default async function CreatorOnboardingPage() {
-  const [context, config] = await Promise.all([getCreatorContext(), getCreatorConfiguration()]);
+  const [context, config] = await Promise.all([
+    getCreatorContext(),
+    getCreatorConfiguration(),
+  ]);
   const ageConfig = configByKey(config, "creator_age_verification_method");
 
   return (
@@ -14,6 +18,7 @@ export default async function CreatorOnboardingPage() {
         initialData={context?.account?.onboardingData ?? {}}
         authenticated={Boolean(context?.account)}
         ageMethodTbd={!ageConfig || ageConfig.is_tbd}
+        demoMode={getCreatorAuthMode() === "demo"}
       />
     </main>
   );

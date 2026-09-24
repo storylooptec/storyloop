@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { requestCreatorOtp, verifyCreatorOtp } from "@/app/creator/login/actions";
 import {
+  completeCreatorDemoOnboarding,
   completeCreatorOnboardingPreview,
   saveCreatorOnboardingStep,
   savePrimaryCreatorProfile,
@@ -26,11 +27,13 @@ export function CreatorOnboardingFlow({
   initialData,
   authenticated,
   ageMethodTbd,
+  demoMode,
 }: {
   initialStep: number;
   initialData: Record<string, unknown>;
   authenticated: boolean;
   ageMethodTbd: boolean;
+  demoMode: boolean;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(Math.max(1, Math.min(9, initialStep)));
@@ -46,7 +49,7 @@ export function CreatorOnboardingFlow({
 
   function advance(next: number, patch: Record<string, Json> = {}) {
     setMessage(null);
-    if (!signedIn) {
+    if (demoMode || !signedIn) {
       setStep(next);
       return;
     }
@@ -123,6 +126,17 @@ export function CreatorOnboardingFlow({
     </>
   ));
 
+  if (step === 3 && demoMode && signedIn) return shell("Your phone is verified for this demo.", (
+    <>
+      <article className="creator-profile-found">
+        <span className="creator-kicker">DEMO AUTHENTICATION</span>
+        <strong>Phone step already completed</strong>
+        <p>The demo login you just used satisfies onboarding turn 3. Production will use the same phone + OTP step with a real SMS provider.</p>
+      </article>
+      <button className="creator-primary" onClick={() => setStep(4)}>Continue</button>
+    </>
+  ));
+
   if (step === 3) return shell("Your phone keeps your Storyloop access with you.", (
     <div className="creator-field-stack">
       <label htmlFor="onboarding-phone">Phone</label>
@@ -149,6 +163,17 @@ export function CreatorOnboardingFlow({
         <p>Category · city · language stay unverified until enrichment is connected.</p>
       </article>
       <button className="creator-primary" onClick={() => advance(6, { derivedProfileState: "provider_pending" })}>Continue unverified</button>
+    </>
+  ));
+
+  if (step === 6 && ageMethodTbd && demoMode) return shell("18+ check", (
+    <>
+      <article className="creator-tbd-gate">
+        <span className="creator-kicker">DEMO ONLY · O4 STILL TBD</span>
+        <strong>Age verification is intentionally not decided.</strong>
+        <p>For this demo we let you continue so the rest of the Creator Hub can be reviewed. No production policy has been chosen or stored.</p>
+      </article>
+      <button className="creator-primary" onClick={() => setStep(7)}>Continue demo</button>
     </>
   ));
 
@@ -216,14 +241,28 @@ export function CreatorOnboardingFlow({
       </article>
       <button
         className="creator-primary"
-        disabled={previewPastTbd || pending}
+        disabled={!demoMode && (previewPastTbd || pending)}
         onClick={() => startTransition(async () => {
-          const result = await completeCreatorOnboardingPreview({ consentVersion: "creator-v1.1", consentedAt: new Date().toISOString() });
-          if (!result.ok) setMessage(result.message ?? "Could not complete onboarding.");
-          else { router.replace("/creator"); router.refresh(); }
+          const result = demoMode
+            ? await completeCreatorDemoOnboarding(handle)
+            : await completeCreatorOnboardingPreview({
+                consentVersion: "creator-v1.1",
+                consentedAt: new Date().toISOString(),
+              });
+
+          if (!result.ok) {
+            setMessage(result.message ?? "Could not complete onboarding.");
+          } else {
+            router.replace("/creator");
+            router.refresh();
+          }
         })}
       >
-        {previewPastTbd ? "Live completion blocked by O4" : "Consent & list me"}
+        {demoMode
+          ? "Enter demo Creator Hub"
+          : previewPastTbd
+            ? "Live completion blocked by O4"
+            : "Consent & list me"}
       </button>
     </>
   ));

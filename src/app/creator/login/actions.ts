@@ -1,5 +1,12 @@
 "use server";
 
+import { cookies } from "next/headers";
+
+import {
+  CREATOR_DEMO_OTP,
+  creatorDemoCookies,
+  getCreatorAuthMode,
+} from "@/creator/auth-mode";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type CreatorAuthResult = {
@@ -19,16 +26,17 @@ export async function requestCreatorOtp(phoneInput: string): Promise<CreatorAuth
     return { ok: false, message: "Enter a phone number with country code, for example +91…" };
   }
 
+  if (getCreatorAuthMode() === "demo") {
+    return { ok: true };
+  }
+
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase.auth.signInWithOtp({
     phone,
     options: { shouldCreateUser: true },
   });
 
-  if (error) {
-    return { ok: false, message: error.message };
-  }
-
+  if (error) return { ok: false, message: error.message };
   return { ok: true };
 }
 
@@ -42,6 +50,27 @@ export async function verifyCreatorOtp(
 
   if (!validPhone(phone) || !/^\d{6}$/.test(token)) {
     return { ok: false, message: "Check the phone number and six-digit OTP." };
+  }
+
+  if (getCreatorAuthMode() === "demo") {
+    if (token !== CREATOR_DEMO_OTP) {
+      return { ok: false, message: "For this demo, use OTP 123456." };
+    }
+
+    const store = await cookies();
+    const options = {
+      httpOnly: true,
+      sameSite: "lax" as const,
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    };
+
+    store.set(creatorDemoCookies.session, "1", options);
+    store.set(creatorDemoCookies.phone, phone, options);
+    store.delete(creatorDemoCookies.onboarded);
+
+    return { ok: true, next: "/creator/onboarding" };
   }
 
   const supabase = await createServerSupabaseClient();

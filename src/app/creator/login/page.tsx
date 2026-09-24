@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { CreatorLoginForm } from "@/components/creator/creator-login-form";
+import { getCreatorAuthMode } from "@/creator/auth-mode";
 import { getCreatorContext } from "@/creator/context";
 
 export default async function CreatorLoginPage() {
@@ -10,7 +11,7 @@ export default async function CreatorLoginPage() {
   return (
     <main className="creator-entry">
       <div className="creator-entry-brand">Storyloop</div>
-      <CreatorLoginForm />
+      <CreatorLoginForm demoMode={getCreatorAuthMode() === "demo"} />
     </main>
   );
 }

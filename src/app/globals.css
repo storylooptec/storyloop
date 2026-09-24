@@ -3329,3 +3329,24 @@ a {
     row-gap: var(--sl-space-12);
   }
 }
+
+
+.creator-demo-auth-note {
+  display: grid;
+  gap: 4px;
+  margin-top: var(--sl-space-16);
+  border-left: 2px solid var(--sl-accent);
+  background: var(--sl-raised);
+  padding: var(--sl-space-12);
+}
+
+.creator-demo-auth-note strong {
+  color: var(--sl-ink);
+  font-size: 12px;
+}
+
+.creator-demo-auth-note span {
+  color: var(--sl-slate);
+  font-size: 12px;
+  line-height: 1.45;
+}

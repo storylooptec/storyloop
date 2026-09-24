@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { requestCreatorOtp, verifyCreatorOtp } from "@/app/creator/login/actions";
 
-export function CreatorLoginForm() {
+export function CreatorLoginForm({ demoMode }: { demoMode: boolean }) {
   const router = useRouter();
   const [stage, setStage] = useState<"phone" | "otp">("phone");
   const [phone, setPhone] = useState("");
@@ -15,10 +15,10 @@ export function CreatorLoginForm() {
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
-    if (stage !== "otp" || resendIn <= 0) return;
+    if (demoMode || stage !== "otp" || resendIn <= 0) return;
     const timer = window.setTimeout(() => setResendIn((value) => value - 1), 1000);
     return () => window.clearTimeout(timer);
-  }, [stage, resendIn]);
+  }, [demoMode, stage, resendIn]);
 
   function send() {
     setMessage(null);
@@ -48,9 +48,16 @@ export function CreatorLoginForm() {
 
   return (
     <div className="creator-auth-card">
-      <p className="creator-kicker">CREATOR SIGN IN</p>
+      <p className="creator-kicker">{demoMode ? "CREATOR SIGN IN · DEMO" : "CREATOR SIGN IN"}</p>
       <h1>Phone. OTP. You&apos;re in.</h1>
       <p className="creator-muted">No password. Returning sessions stay signed in on this device.</p>
+
+      {demoMode ? (
+        <div className="creator-demo-auth-note">
+          <strong>Demo authentication</strong>
+          <span>No SMS is sent. Use OTP <b>123456</b>.</span>
+        </div>
+      ) : null}
 
       {stage === "phone" ? (
         <div className="creator-field-stack">
@@ -64,16 +71,17 @@ export function CreatorLoginForm() {
             onChange={(event) => setPhone(event.target.value)}
           />
           <button className="creator-primary" type="button" disabled={pending} onClick={send}>
-            {pending ? "Sending…" : "Send OTP"}
+            {pending ? "Continuing…" : "Send OTP"}
           </button>
         </div>
       ) : (
         <div className="creator-field-stack">
           <div className="creator-auth-context">
-            <span>OTP sent to</span>
+            <span>{demoMode ? "Demo OTP for" : "OTP sent to"}</span>
             <strong>{phone}</strong>
             <button type="button" onClick={() => setStage("phone")}>Change</button>
           </div>
+
           <label htmlFor="creator-otp">Six-digit OTP</label>
           <input
             id="creator-otp"
@@ -85,22 +93,25 @@ export function CreatorLoginForm() {
             value={otp}
             onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
           />
+
           <button className="creator-primary" type="button" disabled={pending || otp.length !== 6} onClick={verify}>
             {pending ? "Checking…" : "Continue"}
           </button>
-          <button
-            className="creator-text-button"
-            type="button"
-            disabled={pending || resendIn > 0}
-            onClick={send}
-          >
-            {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend OTP"}
-          </button>
+
+          {!demoMode ? (
+            <button
+              className="creator-text-button"
+              type="button"
+              disabled={pending || resendIn > 0}
+              onClick={send}
+            >
+              {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend OTP"}
+            </button>
+          ) : null}
         </div>
       )}
 
       {message ? <p className="creator-error" role="alert">{message}</p> : null}
-      <p className="creator-footnote">Phone OTP requires the Storyloop Supabase SMS provider to be enabled.</p>
     </div>
   );
 }
