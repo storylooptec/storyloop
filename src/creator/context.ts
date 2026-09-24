@@ -32,15 +32,15 @@ export async function getCreatorContext() {
           tier: "free" as CreatorTier,
           onboarding_step: onboarded ? 9 : 1,
           onboarding_completed: onboarded,
-          onboardingData: {},
-          preferences: {},
-          entitlementState: {},
+          onboardingData: {} as Record<string, unknown>,
+          preferences: {} as Record<string, unknown>,
+          entitlementState: {} as Record<string, unknown>,
         },
         creator: {
           id: "00000000-0000-0000-0000-000000000001",
           display_name: null,
           primary_handle: handle,
-          metadata: {},
+          metadata: {} as Record<string, unknown>,
         },
       };
     }
