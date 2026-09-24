@@ -12,7 +12,7 @@ const options = [
   { value: "exhausted", label: "Meter used" },
 ] as const;
 
-export function CreatorCreateDemo() {
+export function CreatorCreateDemo({ cms = {} }: { cms?: Record<string, string> }) {
   const [state, setState] = useState<CreateState>("free");
 
   return (
@@ -20,7 +20,7 @@ export function CreatorCreateDemo() {
       <CreatorDemoStates label="Create state" value={state} options={options} onChange={setState} />
       <header className="creator-screen-head">
         <p className="creator-kicker">CREATE · FREE</p>
-        <h1>Free tools on your data.</h1>
+        <h1>{cms.create_title ?? "Free tools on your data."}</h1>
       </header>
 
       {state === "free" ? (
@@ -43,7 +43,7 @@ export function CreatorCreateDemo() {
           <section className="creator-studio-lock">
             <span className="creator-kicker">STUDIO</span>
             <div className="creator-blurred-own-data"><strong>Sneha · AI preview</strong><span>your own blurred output</span></div>
-            <Link className="creator-primary creator-inline-button" href="/creator/create/studio">See what Studio makes</Link>
+            <Link className="creator-primary creator-inline-button" href="/creator/create/studio">{cms.studio_lock_copy ?? "See what Studio makes"}</Link>
           </section>
         </>
       ) : null}
