@@ -12,7 +12,7 @@ const options = [
   { value: "kyc", label: "First KYC" },
 ] as const;
 
-export function CreatorMoneyDemo() {
+export function CreatorMoneyDemo({ cms = {} }: { cms?: Record<string, string> }) {
   const [state, setState] = useState<MoneyState>("coming");
 
   return (
@@ -37,7 +37,7 @@ export function CreatorMoneyDemo() {
 
       {state === "nothing" ? (
         <>
-          <section className="creator-empty-feed compact"><h2>Nothing due right now.</h2><p>Everything from this year is paid and filed.</p></section>
+          <section className="creator-empty-feed compact"><h2>{cms.money_empty_title ?? "Nothing due right now."}</h2><p>{cms.money_empty_body ?? "Everything from this year is paid and filed."}</p></section>
           <section className="creator-wire-card"><div className="creator-money-row"><span>Paid out this year</span><strong>₹1,42,500</strong></div></section>
           <div className="creator-action-row"><button className="creator-secondary">Statements</button><button className="creator-secondary">TDS certs</button></div>
         </>
