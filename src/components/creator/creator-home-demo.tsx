@@ -12,7 +12,7 @@ const options = [
   { value: "exclusive", label: "Exclusive" },
 ] as const;
 
-export function CreatorHomeDemo() {
+export function CreatorHomeDemo({ cms = {} }: { cms?: Record<string, string> }) {
   const [state, setState] = useState<HomeState>("active");
 
   return (
@@ -65,12 +65,12 @@ export function CreatorHomeDemo() {
       {state === "empty" ? (
         <>
           <section className="creator-empty-feed compact">
-            <h2>Nothing needs you today.</h2>
+            <h2>{cms.home_empty_title ?? "Nothing needs you today."}</h2>
           </section>
           <section className="creator-list-group">
             <div className="creator-list-heading"><h2>Meanwhile</h2></div>
             <article className="creator-wire-card">
-              <p>Fitness rates moved +8% this month. Your card hasn&apos;t.</p>
+              <p>{cms.home_guidance ?? "Fitness rates moved +8% this month. Your card hasn't."}</p>
               <Link className="creator-secondary creator-inline-button" href="/creator/me">Review rates</Link>
             </article>
             <article className="creator-wire-card">
