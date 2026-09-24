@@ -1,65 +1,49 @@
+import Link from "next/link";
+
 import { requireAdminContext } from "@/auth/admin-context";
 import { IllustrativeNote } from "@/components/admin/illustrative-note";
-import { ContextHelp } from "@/components/admin/context-help";
-import { adminHelp } from "@/help/admin-help";
-
-const needsYou = [
-  {
-    title: "Northstar Beauty — enquiry #214",
-    detail: "Reply due · brief already drafted",
-    meta: "2h",
-  },
-  {
-    title: "Fieldnote deal — brand countered",
-    detail: "Draft counter ready",
-    meta: "₹12,000",
-  },
-];
-
-const waiting = [
-  { title: "Harbour Works — room build", detail: "Waiting on pipeline", meta: "Thu" },
-];
-
-const later = [
-  { title: "Trail & Tide invoice #88", detail: "Sent · ageing", meta: "45d ⚠" },
-];
-
-function QueueGroup({
-  title,
-  rows,
-  primaryLabel,
-}: {
-  title: string;
-  rows: Array<{ title: string; detail: string; meta: string }>;
-  primaryLabel?: string;
-}) {
-  return (
-    <section className="ops-panel">
-      <div className="ops-panel-heading sl-system-label">{title}</div>
-      <div className="queue-list">
-        {rows.map((row, index) => (
-          <div className="queue-row" key={row.title}>
-            <span className="queue-dot" aria-hidden="true" />
-            <div className="queue-copy">
-              <strong>{row.title}</strong>
-              <span>{row.detail}</span>
-            </div>
-            <span className="queue-meta">{row.meta}</span>
-            {index === 0 && primaryLabel ? (
-              <button className={primaryLabel === "Review & send" ? "primary-button" : "secondary-button"} type="button">
-                {primaryLabel}
-              </button>
-            ) : null}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export default async function TodayPage() {
   const context = await requireAdminContext();
-  const primaryLabel = context.role === "senior" ? "Review & send" : "Save draft";
+  const supabase = await createServerSupabaseClient();
+
+  const [incompleteResult, revokedResult] = await Promise.all([
+    supabase
+      .from("creator_accounts")
+      .select("creator_id,onboarding_step,updated_at,creators(display_name,primary_handle)")
+      .eq("company_id", context.companyId)
+      .eq("onboarding_completed", false)
+      .order("updated_at", { ascending: true })
+      .limit(8),
+    supabase
+      .from("creator_studio_profiles")
+      .select("creator_id,setup_status,updated_at,creators(display_name,primary_handle)")
+      .eq("setup_status", "revoked")
+      .order("updated_at", { ascending: false })
+      .limit(8),
+  ]);
+
+  const alerts = [
+    ...(incompleteResult.data ?? []).map((row) => {
+      const creator = Array.isArray(row.creators) ? row.creators[0] : row.creators;
+      return {
+        creatorId: row.creator_id,
+        title: creator?.display_name ?? creator?.primary_handle ?? "Creator onboarding",
+        detail: "Onboarding paused at step " + row.onboarding_step + "/9",
+        meta: "Creator",
+      };
+    }),
+    ...(revokedResult.data ?? []).map((row) => {
+      const creator = Array.isArray(row.creators) ? row.creators[0] : row.creators;
+      return {
+        creatorId: row.creator_id,
+        title: creator?.display_name ?? creator?.primary_handle ?? "Creator likeness",
+        detail: "Studio likeness revoked — generation must remain blocked",
+        meta: "Consent",
+      };
+    }),
+  ];
 
   return (
     <div className="ops-page">
@@ -68,23 +52,50 @@ export default async function TodayPage() {
           <p className="sl-system-label page-eyebrow">Today · needs you first</p>
           <h1 className="page-title">Today</h1>
           <p className="page-copy">
-            One ordered queue. Needs you, waiting on others, then later.
+            Live Creator operational alerts first; illustrative agency work remains clearly separated.
           </p>
         </div>
-        <IllustrativeNote />
       </header>
 
-      <QueueGroup title="Needs you · 2" rows={needsYou} primaryLabel={primaryLabel} />
-      <QueueGroup title="Waiting on others · 1" rows={waiting} />
-      <QueueGroup title="Later · 1" rows={later} />
+      <section className="ops-panel">
+        <div className="ops-panel-heading sl-system-label">
+          Creator operations · {alerts.length}
+        </div>
 
-      <aside className="minute-counter">
-        <span className="field-label-with-help sl-system-label">
-          This week, manual work
-          <ContextHelp text={adminHelp.minuteCounter} label="About the minute counter" />
-        </span>
-        <strong>41 min / campaign</strong>
-      </aside>
+        {alerts.length ? (
+          <div className="queue-list">
+            {alerts.map((alert) => (
+              <div className="queue-row" key={alert.creatorId + alert.detail}>
+                <span className="queue-dot" aria-hidden="true" />
+                <div className="queue-copy">
+                  <strong>{alert.title}</strong>
+                  <span>{alert.detail}</span>
+                </div>
+                <span className="queue-meta">{alert.meta}</span>
+                <Link href={"/admin/creators/" + alert.creatorId} className="secondary-button admin-inline-link">
+                  Open
+                </Link>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="overview-muted">No Creator operational alerts right now.</p>
+        )}
+      </section>
+
+      <div className="ops-page-header">
+        <div>
+          <p className="sl-system-label page-eyebrow">Agency queue · illustrative</p>
+        </div>
+        <IllustrativeNote />
+      </div>
+
+      <section className="ops-panel">
+        <div className="ops-panel-heading sl-system-label">Existing agency queue</div>
+        <p className="overview-muted">
+          Brand, campaign and money queues stay illustrative until their live engines exist.
+        </p>
+      </section>
     </div>
   );
 }
