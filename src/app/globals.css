@@ -3917,3 +3917,29 @@ button.creator-tool-row {
     min-height: 300px;
   }
 }
+
+
+/* Creator/Admin operational completion */
+.creator-bottom-nav a{font-size:11px;letter-spacing:.07em;min-height:48px}
+.creator-bottom-nav a[data-active="true"]{color:var(--sl-ink);font-weight:800}
+.creator-logo-wrap,.creator-logo-wrap.compact{background:#fff;border:1px solid rgba(255,255,255,.12)}
+.creator-logo-wrap.compact{width:126px;min-height:40px}
+.creator-logo-wrap.compact img{max-height:27px}
+.creator-cms-list{display:grid}
+.creator-cms-row{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(320px,1.6fr) 120px auto;gap:var(--sl-space-12);align-items:end;padding:var(--sl-space-16) 0;border-bottom:1px solid var(--sl-line)}
+.creator-cms-copy{display:grid;gap:var(--sl-space-4)}
+.creator-cms-copy strong{color:var(--sl-ink)}
+.creator-cms-copy code{color:var(--sl-dim);font-size:11px}
+.creator-cms-row textarea,.creator-cms-row select{width:100%;border:1px solid var(--sl-line);background:var(--sl-raised);color:var(--sl-ink);padding:var(--sl-space-12)}
+.creator-cms-row textarea{resize:vertical;min-height:74px}
+.creator-cms-row label{display:grid;gap:var(--sl-space-8);color:var(--sl-slate);font-size:12px}
+.creator-admin-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--sl-line);border-bottom:1px solid var(--sl-line)}
+.creator-admin-kpis>div{display:grid;gap:var(--sl-space-4);padding:var(--sl-space-16);border-right:1px solid var(--sl-line)}
+.creator-admin-kpis>div:last-child{border-right:0}
+.creator-admin-kpis span{color:var(--sl-slate);font-size:11px}
+.creator-admin-kpis strong{color:var(--sl-ink);font-variant-numeric:tabular-nums}
+.admin-table-link,.admin-back-link{color:var(--sl-ink)}
+.admin-table-link:hover,.admin-back-link:hover{color:var(--sl-accent)}
+.admin-inline-link{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+@media(max-width:900px){.creator-cms-row{grid-template-columns:1fr}.creator-admin-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.creator-admin-kpis>div:nth-child(2){border-right:0}}
+@media(max-width:560px){.creator-bottom-nav{padding-top:10px}.creator-bottom-nav a{font-size:11px;min-height:50px}.creator-admin-kpis{grid-template-columns:1fr}.creator-admin-kpis>div{border-right:0}}
