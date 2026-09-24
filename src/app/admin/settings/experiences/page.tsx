@@ -16,10 +16,10 @@ const experiences = [
     route: "/creator",
     audience: "Creators",
     access: "Authenticated experience",
-    status: "Not built",
+    status: "Active · Demo auth",
     theme: "Storyloop",
     entitlement: "Free / Paid / Exclusive",
-    exists: false,
+    exists: true,
   },
   {
     label: "Company Hub",
