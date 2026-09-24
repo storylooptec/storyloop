@@ -455,6 +455,44 @@ export type Database = {
           },
         ]
       }
+      creator_cms_content: {
+        Row: {
+          company_id: string
+          content_key: string
+          is_active: boolean
+          label: string
+          section: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          company_id: string
+          content_key: string
+          is_active?: boolean
+          label: string
+          section: string
+          updated_at?: string
+          value?: string
+        }
+        Update: {
+          company_id?: string
+          content_key?: string
+          is_active?: boolean
+          label?: string
+          section?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_cms_content_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_create_usage: {
         Row: {
           captions_used: number
