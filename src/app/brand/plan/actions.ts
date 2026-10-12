@@ -26,9 +26,15 @@ export async function generateCampaignBriefAction(formData: FormData) {
     .eq("id", campaignId).eq("company_id", ctx.companyId).maybeSingle();
   if (!campaign) redirect("/brand/home?error=campaign");
 
-  const { data: evidenceRows } = await supabase.from("brand_competitor_observations")
-    .select("id,competitor_name,source_title,source_url,source_snippet,observed_at")
-    .eq("company_id", ctx.companyId).order("observed_at", { ascending: false }).limit(20);
+  const { data: campaignScans } = await supabase.from("brand_competitor_scans")
+    .select("id").eq("campaign_id", campaign.id).eq("company_id", ctx.companyId);
+  const scanIds = (campaignScans ?? []).map((scan) => scan.id);
+  const { data: evidenceRows } = scanIds.length
+    ? await supabase.from("brand_competitor_observations")
+        .select("id,competitor_name,source_title,source_url,source_snippet,observed_at")
+        .eq("company_id", ctx.companyId).in("scan_id", scanIds)
+        .order("observed_at", { ascending: false }).limit(20)
+    : { data: [] };
   const evidence = evidenceRows ?? [];
   if (!evidence.length) redirect("/brand/plan?campaign=" + campaign.id + "&error=no_evidence");
   if (!process.env.OPENAI_API_KEY) redirect("/brand/plan?campaign=" + campaign.id + "&error=provider");
