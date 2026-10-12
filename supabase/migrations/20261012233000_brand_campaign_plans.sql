@@ -113,3 +113,18 @@ $$;
 
 revoke all on function app_private.consume_openai_brief_quota(uuid, uuid) from public, anon;
 grant execute on function app_private.consume_openai_brief_quota(uuid, uuid) to authenticated;
+
+create or replace function public.consume_openai_brief_quota(
+  target_company_id uuid,
+  target_campaign_id uuid
+)
+returns boolean
+language sql
+security definer
+set search_path = pg_catalog, app_private
+as $
+  select app_private.consume_openai_brief_quota(target_company_id, target_campaign_id);
+$;
+
+revoke all on function public.consume_openai_brief_quota(uuid, uuid) from public, anon;
+grant execute on function public.consume_openai_brief_quota(uuid, uuid) to authenticated;
