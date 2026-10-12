@@ -2,6 +2,7 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 
 import { getR2Client } from "@/lib/r2/client";
 import { getR2Config } from "@/lib/r2/config";
+import { r2LogoFailureResponse } from "@/lib/r2/logo-error";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
       new GetObjectCommand({ Bucket: config.bucket, Key: key }),
     );
 
-    if (!result.Body) return new Response("Logo unavailable", { status: 404 });
+    if (!result.Body) return r2LogoFailureResponse(new Error("Empty R2 response"));
 
     const bytes = await result.Body.transformToByteArray();
     const body = Uint8Array.from(bytes).buffer;
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
         "X-Content-Type-Options": "nosniff",
       },
     });
-  } catch {
-    return new Response("Logo unavailable", { status: 404 });
+  } catch (error) {
+    return r2LogoFailureResponse(error);
   }
 }
