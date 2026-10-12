@@ -734,6 +734,7 @@ export type Database = {
       }
     }
     Functions: {
+      consume_serpapi_scan_quota: { Args: { target_company_id: string }; Returns: boolean }
       complete_creator_onboarding: { Args: never; Returns: string }
       ensure_creator_account: {
         Args: { p_phone?: string; p_source?: string }
