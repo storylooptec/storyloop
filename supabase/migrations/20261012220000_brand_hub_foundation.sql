@@ -194,8 +194,10 @@ with check (
   created_by = (select auth.uid())
   and app_private.is_brand_member(company_id)
   and exists (
-    select 1 from public.brand_campaigns c
-    where c.id = campaign_id and c.company_id = company_id
+    select 1
+    from public.brand_campaigns c
+    where c.id = brand_competitor_scans.campaign_id
+      and c.company_id = brand_competitor_scans.company_id
   )
 );
 
@@ -203,9 +205,17 @@ create policy "brand members read their competitor observations"
 on public.brand_competitor_observations for select to authenticated
 using (app_private.is_brand_member(company_id) or app_private.is_storyloop_operator('operations.work'));
 
-create policy "brand members store their competitor observations"
+create policy "brand members store observations for their own scans"
 on public.brand_competitor_observations for insert to authenticated
-with check (app_private.is_brand_member(company_id));
+with check (
+  app_private.is_brand_member(company_id)
+  and exists (
+    select 1
+    from public.brand_competitor_scans s
+    where s.id = brand_competitor_observations.scan_id
+      and s.company_id = brand_competitor_observations.company_id
+  )
+);
 
 create policy "brand and Storyloop users append API usage events"
 on public.external_api_usage_events for insert to authenticated
