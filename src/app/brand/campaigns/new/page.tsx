@@ -33,7 +33,7 @@ export default async function NewBrandCampaignPage() {
             </label>
             <label className={styles.field}>
               Website <span className={styles.muted}>(optional)</span>
-              <input name="website_url" type="url" placeholder="https://yourbrand.com" />
+              <input name="website_url" type="text" inputMode="url" placeholder="yourbrand.com" />
             </label>
 
             <label className={styles.field + " " + styles.spanAll}>
