@@ -64,7 +64,7 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
       <header>
         <p className={styles.eyebrow}>Campaign workspace · Step 2 of 4</p>
         <h1 className={styles.appTitle}>Competitor scan</h1>
-        <p className={styles.appCopy}>Find public search candidates for <strong>{campaign.brand_name}</strong>. Review each result and its source before treating it as a competitor.</p>
+        <p className={styles.appCopy}>Review public search observations related to <strong>{campaign.brand_name}</strong>. Review each result and its source before treating it as a competitor.</p>
       </header>
 
       <nav aria-label="Campaign steps" className={styles.steps}>
@@ -83,7 +83,7 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
         </article>
         <article className={styles.panel}>
           <p className={styles.eyebrow}>Evidence rules</p>
-          <p className={styles.muted}>Search results are candidates, not verified competitor facts. Each item shows its source and the date Storyloop observed it. No competitor spend is presented as fact.</p>
+          <p className={styles.muted}>Search results are evidence sources, not verified competitor brands or facts. Each item shows its source and the date Storyloop observed it. No competitor spend is presented as fact.</p>
           <form action={runCompetitorScanAction}>
             <input type="hidden" name="campaign_id" value={campaign.id} />
             <button type="submit" className={styles.primaryButton}>
@@ -100,8 +100,8 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
       <section className={styles.panel} style={{ marginTop: 18 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "start", flexWrap: "wrap" }}>
           <div>
-            <p className={styles.eyebrow}>Search result candidates</p>
-            <h2 style={{ margin: 0, fontSize: 19 }}>{scanCompleted ? (observations?.length ?? 0) + " candidates to review" : "No scan run yet"}</h2>
+            <p className={styles.eyebrow}>Search result observations</p>
+            <h2 style={{ margin: 0, fontSize: 19 }}>{scanCompleted ? (observations?.length ?? 0) + " source results to review" : "No scan run yet"}</h2>
           </div>
           {latestScan ? <span className={styles.statusPill}>{latestScan.status}</span> : null}
         </div>
@@ -111,9 +111,9 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
             {observations.map((item, index) => (
               <article key={item.id} className={styles.campaignRow} style={{ alignItems: "start" }}>
                 <div style={{ minWidth: 0 }}>
-                  <span className={styles.statusPill}>Candidate {index + 1} · unconfirmed</span>
-                  <h3 style={{ margin: "10px 0 4px", fontSize: 16 }}>{item.competitor_name}</h3>
-                  <p className={styles.muted}>{item.competitor_domain ?? item.source_domain}</p>
+                  <span className={styles.statusPill}>Search result {index + 1}</span>
+                  <h3 style={{ margin: "10px 0 4px", fontSize: 16 }}>{item.source_title}</h3>
+                  <p className={styles.muted}>{Source domain: {item.source_domain}}</p>
                   <p className={styles.muted}>{item.source_snippet || "Open the source to review the result."}</p>
                   <small className={styles.muted}>Observed {new Date(item.observed_at).toLocaleString("en-IN")}{item.published_at ? " · Source date " + new Date(item.published_at).toLocaleDateString("en-IN") : ""}</small>
                 </div>
