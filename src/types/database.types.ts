@@ -728,15 +728,12 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
-    }
-Views: {
       storyloop_public_brand_assets: {
         Row: { dark_logo_key: string | null; light_logo_key: string | null; primary_logo_key: string | null }
         Relationships: []
       }
     }
-        Functions: {
+    Functions: {
       complete_creator_onboarding: { Args: never; Returns: string }
       ensure_creator_account: {
         Args: { p_phone?: string; p_source?: string }
