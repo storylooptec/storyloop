@@ -101,6 +101,7 @@ async function recordUsage(input: {
     cache_hit: input.cacheHit ?? false,
     input_units: input.status === "cached" ? 0 : 1,
     unit_type: "search",
+    estimated_cost_usd: input.status === "cached" ? 0 : (process.env.SERP_API_COST_PER_SEARCH_USD && Number.isFinite(Number(process.env.SERP_API_COST_PER_SEARCH_USD)) ? Number(process.env.SERP_API_COST_PER_SEARCH_USD) : null),
     failure_code: input.failureCode ?? null,
   });
 }
