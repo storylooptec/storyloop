@@ -9,11 +9,18 @@ export async function GET(request: Request) {
   const slot = url.searchParams.get("slot") ?? "primary";
   const supabase = await createServerSupabaseClient();
 
-  const { data } = await supabase
-    .from("company_brand_settings")
-    .select("primary_logo_key,dark_logo_key,light_logo_key")
-    .limit(1)
-    .maybeSingle();
+  const isPublicStoryloopLogo = url.searchParams.get("public") === "1";
+  const { data } = isPublicStoryloopLogo
+    ? await supabase
+        .from("storyloop_public_brand_assets")
+        .select("primary_logo_key,dark_logo_key,light_logo_key")
+        .limit(1)
+        .maybeSingle()
+    : await supabase
+        .from("company_brand_settings")
+        .select("primary_logo_key,dark_logo_key,light_logo_key")
+        .limit(1)
+        .maybeSingle();
 
   const key =
     slot === "dark"
