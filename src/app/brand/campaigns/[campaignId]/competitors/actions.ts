@@ -122,7 +122,7 @@ export async function runCompetitorScanAction(formData: FormData) {
   if (campaignError || !campaign) redirect("/brand/home?error=campaign");
 
   const query = [campaign.brand_name, campaign.promoted_item, "competitors India"].join(" ");
-  const queryHash = normalizedHash(query + "|in|en");
+  const queryHash = normalizedHash(query + "|" + (campaign.website_url ? domainOf(campaign.website_url) ?? "" : "") + "|in|en");
   const cacheCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const { data: cachedScan } = await supabase
