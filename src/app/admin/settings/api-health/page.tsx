@@ -7,14 +7,19 @@ function money(value: number) {
 function number(value: number | string | null) {
   return value === null ? null : Number(value);
 }
+function percentile(values: number[], ratio: number) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.ceil(ratio * sorted.length) - 1)];
+}
 
 export default async function ApiHealthPage() {
-  const context = await requireAdminContext();
+  await requireAdminContext();
   const supabase = await createServerSupabaseClient();
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const { data: events, error } = await supabase.from("external_api_usage_events")
     .select("id,provider_key,operation,model,status,created_at,latency_ms,retry_count,cache_hit,estimated_cost_usd,billed_cost_usd,billed_cost_verified,failure_code")
-    .gte("created_at", since).order("created_at", { ascending: false }).limit(500);
+    .gte("created_at", since).order("created_at", { ascending: false }).limit(1000);
   if (error) throw new Error("Unable to load API usage events");
 
   const rows = events ?? [];
@@ -23,6 +28,7 @@ export default async function ApiHealthPage() {
   const estimatedSpend = rows.reduce((sum, event) => sum + (number(event.estimated_cost_usd) ?? 0), 0);
   const billableEvents = rows.filter((event) => !event.cache_hit);
   const failures = rows.filter((event) => event.status === "failed" || event.status === "rate_limited").length;
+  const latencies = rows.map((event) => event.latency_ms).filter((value): value is number => value !== null);
 
   return (
     <>
@@ -31,10 +37,11 @@ export default async function ApiHealthPage() {
       <p className="page-copy">Recent external provider calls, rate limits, latency and recorded cost. Billed totals include only amounts verified against provider billing data. Missing costs are shown as unreported, not zero.</p>
 
       <div className="overview-grid">
-        <article className="overview-card"><span className="sl-system-label">Calls · last 30 days</span><strong>{rows.length}</strong><small>{billableEvents.length} non-cache attempts</small></article>
+        <article className="overview-card"><span className="sl-system-label">Events loaded · last 30 days</span><strong>{rows.length}</strong><small>Latest 1,000 max · {billableEvents.length} non-cache attempts</small></article>
         <article className="overview-card"><span className="sl-system-label">Failures / limits</span><strong>{failures}</strong><small>Provider and app-side rate limits</small></article>
-        <article className="overview-card"><span className="sl-system-label">Verified billed spend</span><strong>{money(verifiedSpend)}</strong><small>Only provider-verified billed values</small></article>
-        <article className="overview-card"><span className="sl-system-label">Estimated spend</span><strong>{estimatedSpend ? money(estimatedSpend) : "Not reported"}</strong><small>Model or request estimates, when available</small></article>
+        <article className="overview-card"><span className="sl-system-label">Verified billed spend</span><strong>{money(verifiedSpend)}</strong><small>Loaded rows only; verified provider amounts</small></article>
+        <article className="overview-card"><span className="sl-system-label">Estimated spend</span><strong>{estimatedSpend ? money(estimatedSpend) : "Not reported"}</strong><small>Loaded rows; based on configured rates</small></article>
+        <article className="overview-card"><span className="sl-system-label">Latency · p50 / p95</span><strong>{percentile(latencies, 0.5) ?? "—"} / {percentile(latencies, 0.95) ?? "—"} ms</strong><small>Recent recorded provider calls</small></article>
       </div>
 
       <section className="settings-section">
