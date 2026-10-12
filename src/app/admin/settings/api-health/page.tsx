@@ -26,6 +26,7 @@ export default async function ApiHealthPage() {
   const providers = [...new Set(rows.map((event) => event.provider_key))];
   const verifiedSpend = rows.reduce((sum, event) => sum + (event.billed_cost_verified ? number(event.billed_cost_usd) ?? 0 : 0), 0);
   const estimatedSpend = rows.reduce((sum, event) => sum + (number(event.estimated_cost_usd) ?? 0), 0);
+  const hasEstimatedSpend = rows.some((event) => event.estimated_cost_usd !== null);
   const billableEvents = rows.filter((event) => !event.cache_hit);
   const failures = rows.filter((event) => event.status === "failed" || event.status === "rate_limited").length;
   const latencies = rows.map((event) => event.latency_ms).filter((value): value is number => value !== null);
@@ -40,7 +41,7 @@ export default async function ApiHealthPage() {
         <article className="overview-card"><span className="sl-system-label">Events loaded · last 30 days</span><strong>{rows.length}</strong><small>Latest 1,000 max · {billableEvents.length} non-cache attempts</small></article>
         <article className="overview-card"><span className="sl-system-label">Failures / limits</span><strong>{failures}</strong><small>Provider and app-side rate limits</small></article>
         <article className="overview-card"><span className="sl-system-label">Verified billed spend</span><strong>{money(verifiedSpend)}</strong><small>Loaded rows only; verified provider amounts</small></article>
-        <article className="overview-card"><span className="sl-system-label">Estimated spend</span><strong>{estimatedSpend ? money(estimatedSpend) : "Not reported"}</strong><small>Loaded rows; based on configured rates</small></article>
+        <article className="overview-card"><span className="sl-system-label">Estimated spend</span><strong>{hasEstimatedSpend ? money(estimatedSpend) : "Not reported"}</strong><small>Loaded rows; based on configured rates</small></article>
         <article className="overview-card"><span className="sl-system-label">Latency · p50 / p95</span><strong>{percentile(latencies, 0.5) ?? "—"} / {percentile(latencies, 0.95) ?? "—"} ms</strong><small>Recent recorded provider calls</small></article>
       </div>
 
