@@ -18,7 +18,7 @@ export default async function ApiHealthPage() {
   const supabase = await createServerSupabaseClient();
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const { data: events, error } = await supabase.from("external_api_usage_events")
-    .select("id,provider_key,operation,model,status,created_at,latency_ms,retry_count,cache_hit,estimated_cost_usd,billed_cost_usd,billed_cost_verified,failure_code")
+    .select("id,company_id,campaign_id,provider_key,operation,model,status,created_at,latency_ms,retry_count,cache_hit,estimated_cost_usd,billed_cost_usd,billed_cost_verified,failure_code")
     .gte("created_at", since).order("created_at", { ascending: false }).limit(1000);
   if (error) throw new Error("Unable to load API usage events");
 
@@ -63,7 +63,7 @@ export default async function ApiHealthPage() {
         <h2>Request history</h2>
         <div className="audit-table-wrap">
           <table className="audit-table">
-            <thead><tr><th>When</th><th>Provider / operation</th><th>Result</th><th>Latency</th><th>Retries</th><th>Cost</th><th>Details</th></tr></thead>
+            <thead><tr><th>When</th><th>Provider / operation</th><th>Result</th><th>Latency</th><th>Retries</th><th>Cost</th><th>Company / campaign</th><th>Details</th></tr></thead>
             <tbody>
               {rows.map((event) => {
                 const billed = number(event.billed_cost_usd);
@@ -75,6 +75,7 @@ export default async function ApiHealthPage() {
                   <td>{event.latency_ms === null ? "—" : event.latency_ms + " ms"}</td>
                   <td>{event.retry_count}</td>
                   <td>{event.billed_cost_verified && billed !== null ? money(billed) : estimated !== null ? "Est. " + money(estimated) : "Unreported"}</td>
+                  <td>{event.company_id ?? "Platform"}<small>{event.campaign_id ?? "—"}</small></td>
                   <td>{event.failure_code ?? (event.billed_cost_verified ? "Billed verified" : "—")}</td>
                 </tr>;
               })}
