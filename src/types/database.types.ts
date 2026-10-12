@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      brand_memberships: {
+        Row: { company_id: string; created_at: string; role: string; status: string; updated_at: string; user_id: string }
+        Insert: { company_id: string; created_at?: string; role?: string; status?: string; updated_at?: string; user_id: string }
+        Update: { company_id?: string; created_at?: string; role?: string; status?: string; updated_at?: string; user_id?: string }
+        Relationships: []
+      }
+      brand_campaigns: {
+        Row: { brand_name: string; company_id: string; created_at: string; created_by: string; deliverables: string[]; id: string; logo_key: string | null; objective: string; promoted_item: string; status: string; title: string; updated_at: string; website_url: string | null }
+        Insert: { brand_name: string; company_id: string; created_at?: string; created_by: string; deliverables?: string[]; id?: string; logo_key?: string | null; objective: string; promoted_item: string; status?: string; title: string; updated_at?: string; website_url?: string | null }
+        Update: { brand_name?: string; company_id?: string; created_at?: string; created_by?: string; deliverables?: string[]; id?: string; logo_key?: string | null; objective?: string; promoted_item?: string; status?: string; title?: string; updated_at?: string; website_url?: string | null }
+        Relationships: []
+      }
+      brand_competitor_scans: {
+        Row: { campaign_id: string; company_id: string; completed_at: string | null; created_at: string; created_by: string; error_code: string | null; id: string; market: string; provider_key: string; query_hash: string; result_count: number; started_at: string | null; status: string }
+        Insert: { campaign_id: string; company_id: string; completed_at?: string | null; created_at?: string; created_by: string; error_code?: string | null; id?: string; market?: string; provider_key?: string; query_hash: string; result_count?: number; started_at?: string | null; status?: string }
+        Update: { campaign_id?: string; company_id?: string; completed_at?: string | null; created_at?: string; created_by?: string; error_code?: string | null; id?: string; market?: string; provider_key?: string; query_hash?: string; result_count?: number; started_at?: string | null; status?: string }
+        Relationships: []
+      }
+      brand_competitor_observations: {
+        Row: { competitor_domain: string | null; competitor_name: string; company_id: string; content_hash: string; created_at: string; id: string; observed_at: string; published_at: string | null; scan_id: string; source_domain: string; source_snippet: string; source_title: string; source_url: string }
+        Insert: { competitor_domain?: string | null; competitor_name: string; company_id: string; content_hash: string; created_at?: string; id?: string; observed_at?: string; published_at?: string | null; scan_id: string; source_domain: string; source_snippet: string; source_title: string; source_url: string }
+        Update: { competitor_domain?: string | null; competitor_name?: string; company_id?: string; content_hash?: string; created_at?: string; id?: string; observed_at?: string; published_at?: string | null; scan_id?: string; source_domain?: string; source_snippet?: string; source_title?: string; source_url?: string }
+        Relationships: []
+      }
+      external_api_usage_events: {
+        Row: { actor_user_id: string | null; billed_cost_usd: number | null; billed_cost_verified: boolean; cache_hit: boolean; campaign_id: string | null; company_id: string | null; created_at: string; failure_code: string | null; id: string; input_units: number | null; latency_ms: number | null; model: string | null; operation: string; output_units: number | null; provider_key: string; retry_count: number; status: string; unit_type: string | null; estimated_cost_usd: number | null }
+        Insert: { actor_user_id?: string | null; billed_cost_usd?: number | null; billed_cost_verified?: boolean; cache_hit?: boolean; campaign_id?: string | null; company_id?: string | null; created_at?: string; failure_code?: string | null; id?: string; input_units?: number | null; latency_ms?: number | null; model?: string | null; operation: string; output_units?: number | null; provider_key: string; retry_count?: number; status: string; unit_type?: string | null; estimated_cost_usd?: number | null }
+        Update: { actor_user_id?: string | null; billed_cost_usd?: number | null; billed_cost_verified?: boolean; cache_hit?: boolean; campaign_id?: string | null; company_id?: string | null; created_at?: string; failure_code?: string | null; id?: string; input_units?: number | null; latency_ms?: number | null; model?: string | null; operation?: string; output_units?: number | null; provider_key?: string; retry_count?: number; status?: string; unit_type?: string | null; estimated_cost_usd?: number | null }
+        Relationships: []
+      }
       admin_user_preferences: {
         Row: {
           admin_onboarding_completed: boolean
@@ -700,7 +730,13 @@ export type Database = {
     Views: {
       [_ in never]: never
     }
-    Functions: {
+Views: {
+      storyloop_public_brand_assets: {
+        Row: { dark_logo_key: string | null; light_logo_key: string | null; primary_logo_key: string | null }
+        Relationships: []
+      }
+    }
+        Functions: {
       complete_creator_onboarding: { Args: never; Returns: string }
       ensure_creator_account: {
         Args: { p_phone?: string; p_source?: string }
