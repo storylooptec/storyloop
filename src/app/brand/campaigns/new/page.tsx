@@ -54,7 +54,13 @@ export default async function NewBrandCampaignPage() {
               <input name="title" placeholder="e.g. Summer launch" maxLength={120} />
             </label>
 
-            <label className={styles.field + " " + styles.spanAll}>
+            <label className={styles.field}>
+              Planned campaign budget <span className={styles.muted}>(optional, INR)</span>
+              <input name="budget_inr" type="number" min="0" max="1000000000" step="1000" placeholder="e.g. 250000" />
+              <span className={styles.muted}>Used for the budget check after creator rates and Storyloop history are available.</span>
+            </label>
+
+            <label className={styles.field}>
               Campaign objective <span aria-hidden="true">*</span>
               <select name="objective" defaultValue="awareness" required>
                 <option value="awareness">Awareness</option>
