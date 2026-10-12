@@ -4,10 +4,10 @@ import { requireBrandContext } from "@/brand/context";
 import { BrandShell } from "@/components/brand/brand-shell";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
-import { generateCampaignScriptsAction } from "./actions";
+import { generateCampaignScriptsAction, updateCampaignConceptAction } from "./actions";
 import styles from "../brand.module.css";
 
-type Props = { searchParams: Promise<{ campaign?: string; error?: string; generated?: string }> };
+type Props = { searchParams: Promise<{ campaign?: string; error?: string; generated?: string; saved?: string }> };
 type Concept = { angle: string; hook: string; script: string; cta: string; format: string };
 
 function readConcepts(value: Json): Concept[] {
@@ -26,11 +26,12 @@ function errorText(value?: string) {
   if (value === "limit") return "This campaign reached the AI generation limit for this hour.";
   if (value === "provider_limit") return "The AI provider rate limited this request.";
   if (value === "generation") return "Campaign concepts could not be generated. Try again after checking the approved brief.";
+  if (value === "save") return "The concept could not be saved. Check the fields and try again.";
   return "";
 }
 
 export default async function BrandCreatePage({ searchParams }: Props) {
-  const [{ campaign: selectedId, error, generated }, context] = await Promise.all([searchParams, requireBrandContext()]);
+  const [{ campaign: selectedId, error, generated, saved }, context] = await Promise.all([searchParams, requireBrandContext()]);
   const supabase = await createServerSupabaseClient();
   const { data: campaigns } = await supabase.from("brand_campaigns")
     .select("id,title,status,objective,deliverables")
@@ -51,6 +52,7 @@ export default async function BrandCreatePage({ searchParams }: Props) {
       </header>
       {errorText(error) ? <p className={styles.error} role="alert">{errorText(error)}</p> : null}
       {generated ? <p className={styles.evidenceNote} role="status">Three draft concepts are ready for review.</p> : null}
+      {saved ? <p className={styles.evidenceNote} role="status">Concept edits saved.</p> : null}
 
       {campaign ? (
         <section className={styles.panel} style={{ marginTop: 18 }}>
@@ -74,11 +76,16 @@ export default async function BrandCreatePage({ searchParams }: Props) {
                   <div className={styles.homeGrid}>
                     {readConcepts(draft.content).map((concept, index) => (
                       <article className={styles.panel} key={draft.id + "-" + index}>
-                        <span className={styles.statusPill}>{concept.format}</span>
-                        <h3 style={{ fontSize: 17 }}>{concept.angle}</h3>
-                        <p><strong>Hook:</strong> {concept.hook}</p>
-                        <p className={styles.muted}>{concept.script}</p>
-                        <p><strong>CTA:</strong> {concept.cta}</p>
+                        <form action={updateCampaignConceptAction} className={styles.formWrap}>
+                          <input type="hidden" name="creative_id" value={draft.id} />
+                          <input type="hidden" name="concept_index" value={index} />
+                          <label className={styles.field}>Format<input name="format" defaultValue={concept.format} maxLength={120} required /></label>
+                          <label className={styles.field}>Angle<input name="angle" defaultValue={concept.angle} maxLength={500} required /></label>
+                          <label className={styles.field}>Opening hook<textarea name="hook" defaultValue={concept.hook} rows={2} required /></label>
+                          <label className={styles.field}>Script<textarea name="script" defaultValue={concept.script} rows={7} required /></label>
+                          <label className={styles.field}>Call to action<textarea name="cta" defaultValue={concept.cta} rows={2} required /></label>
+                          <button className={styles.secondaryButton} type="submit">Save concept</button>
+                        </form>
                       </article>
                     ))}
                   </div>
