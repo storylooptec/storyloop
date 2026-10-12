@@ -210,6 +210,26 @@
 .field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid rgba(100, 54, 233, .22); border-color: var(--brand-violet); }
 .passwordRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .passwordRow a, .helpLink { color: var(--brand-violet); font-size: 11px; font-weight: 650; }
+.passwordInput { position: relative; min-width: 0; }
+.passwordInput input { padding-right: 52px; }
+.passwordInput input::-ms-reveal { display: none; }
+.passwordToggle {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 44px;
+  height: calc(100% - 2px);
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--brand-body);
+  cursor: pointer;
+}
+.passwordToggle:hover { color: var(--brand-violet); background: var(--brand-soft); }
+.passwordToggle:focus-visible { outline: 2px solid var(--brand-violet); outline-offset: -3px; }
 .rememberRow { display: flex; align-items: center; gap: 8px; color: var(--brand-body); font-size: 12px; }
 .rememberRow input { accent-color: var(--brand-violet); }
 .error { border-left: 3px solid #bd2450; padding: 8px 10px; background: #fff4f6; color: #8e1838; font-size: 12px; }

@@ -17,6 +17,7 @@ export function startMock(port=4545){return new Promise(resolve=>{const server=h
  const url=new URL(req.url,'http://localhost');res.setHeader('Content-Type','application/json');
  if(url.pathname==='/auth/v1/user'){res.end(JSON.stringify(user));return;}
  if(url.pathname==='/auth/v1/token'){res.statusCode=400;res.end(JSON.stringify({error:'invalid_grant',error_description:'Test credentials rejected'}));return;}
+ if(url.pathname==='/auth/v1/signup'&&req.method==='POST'){res.end(JSON.stringify({user,session:null}));return;}
  if(url.pathname==='/auth/v1/logout'){res.end('{}');return;}
  if(url.pathname.startsWith('/rest/v1/rpc/')){res.end('[]');return;}
  const name=url.pathname.split('/').at(-1);let rows=structuredClone(fixtures[name]??[]);

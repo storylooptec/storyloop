@@ -89,7 +89,7 @@ export async function signOutBrandAction() {
 export async function registerBrandAction(formData: FormData) {
   const email=String(formData.get("email")??"").trim().toLowerCase();
   const password=String(formData.get("password")??"");
-  if(!validEmail(email)||password.length<12||password.length>128)redirect("/brand/register?error=details");
+  if(!validEmail(email)||password.length<6||password.length>128)redirect("/brand/register?error=details");
   const site=process.env.NEXT_PUBLIC_SITE_URL;
   if(!site)redirect("/brand/register?error=configuration");
   const db=await createServerSupabaseClient();

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { BrandWordmark } from "@/components/brand/brand-wordmark";
+import { PasswordInput } from "@/components/brand/password-input";
 import { sendBrandEmailCodeAction, signInBrandAction } from "./actions";
 import styles from "./brand.module.css";
 
@@ -84,10 +85,10 @@ export default async function BrandLandingPage({ searchParams }: Props) {
               Work email
               <input type="email" name="email" autoComplete="email" placeholder="name@yourcompany.com" required />
             </label>
-            <label className={styles.field}>
-              <span className={styles.passwordRow}><span>Password</span><a href="#email-code">Use a code instead</a></span>
-              <input type="password" name="password" autoComplete="current-password" placeholder="Enter your password" required />
-            </label>
+            <div className={styles.field}>
+              <div className={styles.passwordRow}><label htmlFor="brand-password">Password</label><a href="#email-code">Use a code instead</a></div>
+              <PasswordInput id="brand-password" name="password" autoComplete="current-password" placeholder="Enter your password" required />
+            </div>
             <button className={styles.primaryButton} type="submit">Sign in</button>
             <div id="email-code" className={styles.loginForm}>
               <span className={styles.muted}>Or sign in without a password</span>

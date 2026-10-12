@@ -94,6 +94,63 @@ try {
   await page.waitForURL(url => url.pathname === '/');
   console.log('PASS uploaded brand logo replaces fallback and links home');
 
+  // Password visibility must preserve the value and never submit the form.
+  await page.route('**/api/brand/logo?*', route => route.fulfill({ contentType: 'image/png', body: 'unavailable' }));
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const path of ['/brand', '/brand/register']) {
+      await page.goto(origin + path);
+      const password = page.getByLabel('Password', { exact: true });
+      await password.fill('abc123');
+      assert.equal(await password.getAttribute('type'), 'password');
+      const show = page.getByRole('button', { name: 'Show password', exact: true });
+      assert.equal(await show.getAttribute('type'), 'button');
+      const box = await show.boundingBox();
+      assert.ok(box.width >= 44 && box.height >= 44, 'Eye button has a usable tap target');
+      await show.click();
+      assert.equal(await password.getAttribute('type'), 'text');
+      assert.equal(await password.inputValue(), 'abc123');
+      const hide = page.getByRole('button', { name: 'Hide password', exact: true });
+      await hide.focus();
+      await page.keyboard.press('Enter');
+      assert.equal(await password.getAttribute('type'), 'password');
+      assert.equal(await password.inputValue(), 'abc123');
+      assert.equal(new URL(page.url()).pathname, path, 'Toggle does not navigate or submit');
+      assert.equal(new URL(page.url()).search, '', 'Toggle does not submit the form');
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      await password.fill('');
+      await page.screenshot({ path: new URL(`brand-password-${path.endsWith('register') ? 'register' : 'login'}-${width}.png`, artifacts).pathname, fullPage: true });
+    }
+    console.log(`PASS password eye button on sign-in and registration at ${width}px`);
+  }
+
+  await page.goto(origin + '/brand/register');
+  await page.getByLabel('Work email').fill('brand@example.test');
+  const registrationPassword = page.getByLabel('Password', { exact: true });
+  await registrationPassword.pressSequentially('abc12');
+  assert.equal(await registrationPassword.evaluate(node => node.validity.tooShort), true, 'Browser rejects fewer than six characters');
+  // Bypass native validation to verify the server independently enforces the minimum.
+  await page.locator('form').evaluate(form => { form.noValidate = true; });
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await page.waitForURL(url => url.searchParams.get('error') === 'details');
+  assert.match(await page.locator('main').getByRole('alert').innerText(), /at least 6 characters/);
+  for (const value of ['abc123', 'longer-password-123']) {
+    await page.goto(origin + '/brand/register');
+    await page.getByLabel('Work email').fill('brand@example.test');
+    await registrationPassword.fill(value);
+    assert.equal(await registrationPassword.evaluate(node => node.checkValidity()), true);
+    await page.getByRole('button', { name: 'Create account', exact: true }).click();
+    await page.waitForURL(url => url.searchParams.get('sent') === '1');
+    assert.match(await page.getByRole('status').innerText(), /confirmation link/);
+  }
+  await page.goto(origin + '/brand');
+  await page.getByLabel('Work email').fill('brand@example.test');
+  await page.getByLabel('Password', { exact: true }).fill('abc123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.waitForURL(url => url.searchParams.get('error') === 'credentials');
+  assert.equal(await page.locator('button[formnovalidate]').count(), 1, 'Email code still bypasses password validation');
+  console.log('PASS six-character and longer registration, short-password rejection, and sign-in submission against local Auth fixtures');
+
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(origin + '/');
   const card = page.getByRole('link', { name: /I'm a creator/ });
