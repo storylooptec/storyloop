@@ -61,7 +61,7 @@ export async function sendBrandEmailCodeAction(formData: FormData) {
   });
 
   if (error) redirect("/brand?error=code");
-  redirect(`/brand/verify?email=${encodeURIComponent(email)}`);
+  redirect(`/brand/verify?email=${encodeURIComponent(email)}&sent=1`);
 }
 
 export async function verifyBrandEmailCodeAction(formData: FormData) {
