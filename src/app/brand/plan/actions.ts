@@ -139,7 +139,7 @@ export async function generateCampaignBriefAction(formData: FormData) {
   const now = new Date().toISOString();
   const inputRate = Number(process.env.OPENAI_INPUT_COST_PER_1M_USD);
   const outputRate = Number(process.env.OPENAI_OUTPUT_COST_PER_1M_USD);
-  const estimatedCost = Number.isFinite(inputRate) && Number.isFinite(outputRate)
+  const estimatedCost = Boolean(process.env.OPENAI_INPUT_COST_PER_1M_USD && process.env.OPENAI_OUTPUT_COST_PER_1M_USD) && Number.isFinite(inputRate) && Number.isFinite(outputRate)
     ? ((completion?.usage?.prompt_tokens ?? 0) * inputRate + (completion?.usage?.completion_tokens ?? 0) * outputRate) / 1_000_000
     : null;
   const { error } = await supabase.from("brand_campaign_plans").upsert({
