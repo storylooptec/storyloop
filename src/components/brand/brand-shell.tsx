@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { signOutBrandAction } from "@/app/brand/actions";
+import { BrandWordmark } from "./brand-wordmark";
 import styles from "@/app/brand/brand.module.css";
 
 const links = [
@@ -27,9 +28,8 @@ export function BrandShell({
   return (
     <div className={styles.appShell}>
       <aside className={styles.sidebar}>
-        <Link href="/brand/home" className={styles.brandLogo}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className={styles.brandLogoImage} src="/api/brand/logo?slot=light&public=1" alt="Storyloop" />
+        <Link href="/brand/home" className={styles.brandLogo} aria-label="Storyloop brand workspace">
+          <BrandWordmark />
         </Link>
         <div className={styles.workspaceBox}>
           <span className={styles.muted}>Brand workspace</span>

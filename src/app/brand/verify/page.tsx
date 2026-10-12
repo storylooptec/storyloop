@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BrandWordmark } from "@/components/brand/brand-wordmark";
 import { verifyBrandEmailCodeAction } from "../actions";
 import styles from "../brand.module.css";
 
@@ -14,9 +15,8 @@ export default async function BrandVerifyPage({ searchParams }: Props) {
   return (
     <main className={styles.publicPage}>
       <header className={styles.brandHeader}>
-        <Link href="/brand" className={styles.logoLockup}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className={styles.brandLogoImage} src="/api/brand/logo?slot=light&public=1" alt="Storyloop" />
+        <Link href="/brand" className={styles.logoLockup} aria-label="Storyloop for brands">
+          <BrandWordmark />
         </Link>
         <Link href="/brand" className={styles.textButton}>Back to brand homepage</Link>
       </header>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BrandWordmark } from "@/components/brand/brand-wordmark";
 import { sendBrandEmailCodeAction, signInBrandAction } from "./actions";
 import styles from "./brand.module.css";
 
@@ -23,11 +24,13 @@ export default async function BrandLandingPage({ searchParams }: Props) {
 
   return (
     <main className={styles.publicPage}>
-      <header className={styles.brandHeader}>
-        <Link href="/brand" className={styles.logoLockup} aria-label="Storyloop for brands">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className={styles.brandLogoImage} src="/api/brand/logo?slot=light&public=1" alt="Storyloop" />
-        </Link>
+      <header className={`${styles.brandHeader} ${styles.landingHeader}`}>
+        <div className={styles.headerIdentity}>
+          <Link href="/" className={styles.logoLockup} aria-label="Storyloop home">
+            <BrandWordmark />
+          </Link>
+          <Link href="/" className={styles.homeLink}><span aria-hidden="true">←</span> Home</Link>
+        </div>
         <nav className={styles.publicNav} aria-label="Main navigation">
           <a href="#for-brands">For brands</a>
           <a href="#how-it-works">How it works</a>

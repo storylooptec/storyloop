@@ -62,6 +62,38 @@ try {
     assert.ok(await page.locator('main').isVisible());
     console.log(`PASS homepage navigation to ${destination}`);
   }
+
+  for (const width of [1440, 1024, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: width > 700 ? 1000 : 844 });
+    await page.goto(origin + '/brand');
+    await page.waitForFunction(() => !document.querySelector('header img'));
+    await page.evaluate(() => document.fonts.ready);
+    const logo = page.getByRole('link', { name: 'Storyloop home', exact: true });
+    assert.ok(await logo.getByText('Storyloop.', { exact: true }).isVisible(), 'Brand logo fallback is visible');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `Brand has no overflow at ${width}px`);
+    for (const name of ['Home', 'Sign in', 'Create account']) {
+      const link = page.locator('header').getByRole('link', { name, exact: true });
+      assert.ok(await link.isVisible(), `${name} remains visible at ${width}px`);
+      assert.ok((await link.boundingBox()).height >= 44, `${name} tap target at ${width}px`);
+    }
+    if (width === 1440 || width === 390) {
+      await page.screenshot({ path: new URL(`brand-header-${width === 1440 ? 'desktop' : 'mobile'}.png`, artifacts).pathname, fullPage: true });
+    }
+    await page.getByRole('link', { name: 'Home', exact: true }).click();
+    await page.waitForURL(url => url.pathname === '/');
+    console.log(`PASS brand logo fallback and Home navigation at ${width}px`);
+  }
+
+  await page.route('**/api/brand/logo?*', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="144" height="38"><text x="0" y="28">Test logo</text></svg>' }));
+  await page.goto(origin + '/brand');
+  await page.locator('header [data-logo-loaded="true"]').waitFor();
+  const uploadedLogo = page.locator('header img');
+  assert.equal(await uploadedLogo.evaluate(node => node.naturalWidth > 0 && getComputedStyle(node).opacity === '1'), true);
+  assert.equal(await page.getByRole('link', { name: 'Storyloop home', exact: true }).getByText('Storyloop.', { exact: true }).isVisible(), false);
+  await page.getByRole('link', { name: 'Storyloop home', exact: true }).click();
+  await page.waitForURL(url => url.pathname === '/');
+  console.log('PASS uploaded brand logo replaces fallback and links home');
+
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(origin + '/');
   const card = page.getByRole('link', { name: /I'm a creator/ });
