@@ -41,7 +41,7 @@ async function wait(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function searchSerpApi(query: string, apiKey: string): Promise<SearchPayload> {
+async function searchSerpApi(query: string, apiKey: string): Promise<{ payload: SearchPayload; retryCount: number }> {
   const endpoint = new URL("https://serpapi.com/search.json");
   endpoint.searchParams.set("engine", "google");
   endpoint.searchParams.set("q", query);
@@ -66,7 +66,7 @@ async function searchSerpApi(query: string, apiKey: string): Promise<SearchPaylo
 
       const payload = await response.json() as SearchPayload;
       if (payload.error) throw new Error("provider_request_failed");
-      return payload;
+      return { payload, retryCount: attempt };
     } catch (error) {
       if (error instanceof Error && error.message === "provider_rate_limited") throw error;
       if (error instanceof Error && error.message === "provider_request_failed") throw error;
@@ -86,6 +86,7 @@ async function recordUsage(input: {
   latencyMs?: number;
   cacheHit?: boolean;
   failureCode?: string;
+  retryCount?: number;
 }) {
   const supabase = await createServerSupabaseClient();
   await supabase.from("external_api_usage_events").insert({
@@ -96,7 +97,7 @@ async function recordUsage(input: {
     operation: "competitor_discovery",
     status: input.status,
     latency_ms: input.latencyMs ?? null,
-    retry_count: 0,
+    retry_count: input.retryCount ?? 0,
     cache_hit: input.cacheHit ?? false,
     input_units: input.status === "cached" ? 0 : 1,
     unit_type: "search",
@@ -145,6 +146,10 @@ export async function runCompetitorScanAction(formData: FormData) {
     redirect("/brand/campaigns/" + campaign.id + "/competitors?cached=1");
   }
 
+  const apiKey = process.env.SERP_API_KEY;
+  if (!apiKey || process.env.SERP_API_ENABLED !== "true") {
+    redirect("/brand/campaigns/" + campaign.id + "/competitors?error=provider");
+  }
   const { data: activeScan } = await supabase
     .from("brand_competitor_scans")
     .select("id")
@@ -193,19 +198,11 @@ export async function runCompetitorScanAction(formData: FormData) {
     redirect("/brand/campaigns/" + campaign.id + "/competitors?error=limit");
   }
 
-  const apiKey = process.env.SERP_API_KEY;
-  if (!apiKey) {
-    await supabase.from("brand_competitor_scans")
-      .update({ status: "failed", error_code: "provider_not_configured", completed_at: new Date().toISOString() })
-      .eq("id", scan.id)
-      .eq("company_id", context.companyId);
-    redirect("/brand/campaigns/" + campaign.id + "/competitors?error=provider");
-  }
 
   const startedAt = Date.now();
 
   try {
-    const payload = await searchSerpApi(query, apiKey);
+    const { payload, retryCount } = await searchSerpApi(query, apiKey);
     const ownDomain = campaign.website_url ? domainOf(campaign.website_url) : null;
     const seenDomains = new Set<string>();
     const observations = (payload.organic_results ?? [])
@@ -253,6 +250,7 @@ export async function runCompetitorScanAction(formData: FormData) {
       actorUserId: context.userId,
       status: "success",
       latencyMs: Date.now() - startedAt,
+      retryCount,
     });
   } catch (error) {
     const rateLimited = error instanceof Error && error.message === "provider_rate_limited";
