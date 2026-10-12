@@ -32,6 +32,12 @@ export type Database = {
         Update: { approval_state?: string; approved_at?: string | null; brief?: Json; campaign_id?: string; company_id?: string; created_at?: string; generated_at?: string | null; generated_model?: string | null; id?: string; updated_at?: string }
         Relationships: []
       }
+      brand_campaign_creatives: {
+        Row: { approval_state: string; campaign_id: string; company_id: string; content: Json; created_at: string; generated_model: string | null; id: string; updated_at: string }
+        Insert: { approval_state?: string; campaign_id: string; company_id: string; content?: Json; created_at?: string; generated_model?: string | null; id?: string; updated_at?: string }
+        Update: { approval_state?: string; campaign_id?: string; company_id?: string; content?: Json; created_at?: string; generated_model?: string | null; id?: string; updated_at?: string }
+        Relationships: []
+      }
       brand_competitor_scans: {
         Row: { campaign_id: string; company_id: string; completed_at: string | null; created_at: string; created_by: string; error_code: string | null; id: string; market: string; provider_key: string; query_hash: string; result_count: number; started_at: string | null; status: string }
         Insert: { campaign_id: string; company_id: string; completed_at?: string | null; created_at?: string; created_by: string; error_code?: string | null; id?: string; market?: string; provider_key?: string; query_hash: string; result_count?: number; started_at?: string | null; status?: string }
