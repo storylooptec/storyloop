@@ -160,7 +160,7 @@ returns boolean
 language plpgsql
 security definer
 set search_path = pg_catalog, public, app_private
-as $
+as $$
 declare
   quota_window date := (now() at time zone 'UTC')::date;
   used_count integer;
@@ -190,7 +190,7 @@ begin
 
   return true;
 end;
-$;
+$$;
 
 revoke all on function app_private.is_brand_member(uuid) from public, anon;
 revoke all on function app_private.consume_serpapi_scan_quota(uuid) from public, anon;
