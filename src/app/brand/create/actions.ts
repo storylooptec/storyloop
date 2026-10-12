@@ -90,7 +90,7 @@ export async function generateCampaignScriptsAction(formData: FormData) {
     : { error: new Error("no_creative") };
   const inputRate = Number(process.env.OPENAI_INPUT_COST_PER_1M_USD);
   const outputRate = Number(process.env.OPENAI_OUTPUT_COST_PER_1M_USD);
-  const estimatedCost = result && Number.isFinite(inputRate) && Number.isFinite(outputRate)
+  const estimatedCost = result && process.env.OPENAI_INPUT_COST_PER_1M_USD && process.env.OPENAI_OUTPUT_COST_PER_1M_USD && Number.isFinite(inputRate) && Number.isFinite(outputRate)
     ? ((result.usage?.prompt_tokens ?? 0) * inputRate + (result.usage?.completion_tokens ?? 0) * outputRate) / 1_000_000
     : null;
   await supabase.from("external_api_usage_events").insert({
