@@ -20,5 +20,5 @@ try{
  }
  if(!ready)throw new Error('Next server did not start: '+output);
  process.env.BRAND_TEST_ORIGIN=origin;
- await import('./smoke.mjs');
+ await import(process.argv.includes('--homepage') ? './home.mjs' : './smoke.mjs');
 }finally{server.kill('SIGTERM');fixture.close();}
