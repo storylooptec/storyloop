@@ -38,26 +38,39 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
 
   if (!campaign) notFound();
 
-  const { data: latestScan } = await supabase
+  const { data: successfulScans } = await supabase
     .from("brand_competitor_scans")
     .select("id,status,result_count,created_at,completed_at")
     .eq("campaign_id", campaign.id)
     .eq("company_id", context.companyId)
+    .eq("status", "succeeded")
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(2);
 
+  const latestScan = successfulScans?.[0] ?? null;
+  const previousScan = successfulScans?.[1] ?? null;
   const { data: observations } = latestScan
-    ? await supabase
-        .from("brand_competitor_observations")
-        .select("id,competitor_name,competitor_domain,source_url,source_domain,source_title,source_snippet,published_at,observed_at")
-        .eq("scan_id", latestScan.id)
-        .eq("company_id", context.companyId)
+    ? await supabase.from("brand_competitor_observations")
+        .select("id,competitor_name,competitor_domain,source_url,source_domain,source_title,source_snippet,published_at,observed_at,content_hash")
+        .eq("scan_id", latestScan.id).eq("company_id", context.companyId)
         .order("observed_at", { ascending: false })
     : { data: [] };
+  const { data: previousObservations } = previousScan
+    ? await supabase.from("brand_competitor_observations")
+        .select("source_url,content_hash")
+        .eq("scan_id", previousScan.id).eq("company_id", context.companyId)
+    : { data: [] };
+
+  const priorByUrl = new Map((previousObservations ?? []).map((item) => [item.source_url, item.content_hash]));
+  const currentUrls = new Set((observations ?? []).map((item) => item.source_url));
+  const changeFor = (item: { source_url: string; content_hash: string }) => {
+    const priorHash = priorByUrl.get(item.source_url);
+    return priorHash === undefined ? "New" : priorHash === item.content_hash ? "Seen again" : "Changed";
+  };
+  const removedCount = (previousObservations ?? []).filter((item) => !currentUrls.has(item.source_url)).length;
 
   const alert = messageFor(query.error);
-  const scanCompleted = latestScan?.status === "succeeded";
+  const scanCompleted = Boolean(latestScan);
 
   return (
     <BrandShell active="Competitors" companyName={context.companyName} email={context.email}>
@@ -95,6 +108,8 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
 
       {query.cached ? <p className={styles.evidenceNote} role="status">Showing the saved scan from the last 24 hours; no new SerpApi request was sent.</p> : null}
       {query.scanned ? <p className={styles.evidenceNote} role="status">Scan complete. These search results are ready for review.</p> : null}
+      {latestScan && previousScan ? <p className={styles.evidenceNote}>Compared with {new Date(previousScan.created_at).toLocaleDateString("en-IN")}: {(observations ?? []).filter((item) => changeFor(item) === "New").length} new, {(observations ?? []).filter((item) => changeFor(item) === "Changed").length} changed, {removedCount} no longer visible. These are search-result changes, not confirmed market-share shifts.</p> : null}
+      {latestScan && !previousScan ? <p className={styles.evidenceNote}>First successful scan · baseline recorded {new Date(latestScan.created_at).toLocaleString("en-IN")}.</p> : null}
       {alert ? <p className={styles.error} role="alert">{alert}</p> : null}
 
       <section className={styles.panel} style={{ marginTop: 18 }}>
@@ -111,7 +126,7 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
             {observations.map((item, index) => (
               <article key={item.id} className={styles.campaignRow} style={{ alignItems: "start" }}>
                 <div style={{ minWidth: 0 }}>
-                  <span className={styles.statusPill}>Search result {index + 1}</span>
+                  <span className={styles.statusPill}>{changeFor(item)} · source result {index + 1}</span>
                   <h3 style={{ margin: "10px 0 4px", fontSize: 16 }}>{item.source_title}</h3>
                   <p className={styles.muted}>Source domain: {item.source_domain}</p>
                   <p className={styles.muted}>{item.source_snippet || "Open the source to review the result."}</p>
@@ -125,7 +140,7 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
           <div className={styles.emptyState}>
             {scanCompleted
               ? "The search did not return reviewable source results. Adjust the brand or product details and scan again."
-              : "Run a scan to collect the first dated baseline. After a later scan, Storyloop can compare new observations with this baseline."}
+              : "Run a scan to collect the first dated baseline. After a later scan, Storyloop compares source snapshots and flags new, changed and no longer visible results."}
           </div>
         )}
       </section>
