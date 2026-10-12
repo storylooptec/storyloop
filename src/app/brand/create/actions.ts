@@ -106,3 +106,40 @@ export async function generateCampaignScriptsAction(formData: FormData) {
   revalidatePath("/brand/create");
   redirect("/brand/create?campaign=" + campaign.id + "&generated=1");
 }
+
+export async function updateCampaignConceptAction(formData: FormData) {
+  const ctx = await requireBrandContext();
+  const creativeId = String(formData.get("creative_id") ?? "");
+  const index = Number(formData.get("concept_index"));
+  if (!/^[0-9a-f-]{36}$/i.test(creativeId) || !Number.isInteger(index) || index < 0 || index > 2) {
+    redirect("/brand/create?error=save");
+  }
+  const supabase = await createServerSupabaseClient();
+  const { data: draft } = await supabase.from("brand_campaign_creatives")
+    .select("id,campaign_id,content")
+    .eq("id", creativeId).eq("company_id", ctx.companyId).maybeSingle();
+  if (!draft) redirect("/brand/create?error=save");
+
+  const data = draft.content as unknown as { concepts?: unknown[] };
+  if (!Array.isArray(data.concepts) || !data.concepts[index] || typeof data.concepts[index] !== "object") {
+    redirect("/brand/create?error=save");
+  }
+  const existing = data.concepts[index] as Record<string, unknown>;
+  const concept = {
+    angle: String(formData.get("angle") ?? "").trim().slice(0, 500),
+    hook: String(formData.get("hook") ?? "").trim().slice(0, 500),
+    script: String(formData.get("script") ?? "").trim().slice(0, 3000),
+    cta: String(formData.get("cta") ?? "").trim().slice(0, 500),
+    format: String(formData.get("format") ?? "").trim().slice(0, 120),
+  };
+  if (Object.values(concept).some((value) => !value)) redirect("/brand/create?campaign=" + draft.campaign_id + "&error=save");
+  const concepts = [...data.concepts];
+  concepts[index] = { ...existing, ...concept };
+  const { error } = await supabase.from("brand_campaign_creatives").update({
+    content: { concepts } as unknown as Json,
+    updated_at: new Date().toISOString(),
+  }).eq("id", creativeId).eq("company_id", ctx.companyId);
+  if (error) redirect("/brand/create?campaign=" + draft.campaign_id + "&error=save");
+  revalidatePath("/brand/create");
+  redirect("/brand/create?campaign=" + draft.campaign_id + "&saved=1");
+}
