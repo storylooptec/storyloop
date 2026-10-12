@@ -10,7 +10,7 @@ import { addManualCompetitorAction, enrichCompetitorAction, reviewCompetitorActi
 import { ResearchButton } from "./submit-button";
 
 export const maxDuration = 180;
-type Props = { params: Promise<{ campaignId: string }>; searchParams: Promise<{ cached?: string; error?: string; scanned?: string; saved?: string; enriched?: string; reviews?: string; scan?: string }> };
+type Props = { params: Promise<{ campaignId: string }>; searchParams: Promise<{ cached?: string; error?: string; scanned?: string; saved?: string; created?: string; enriched?: string; reviews?: string; scan?: string }> };
 const when = (value: string) => new Date(value).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 function errorMessage(code?: string) {
   if (!code) return "";
@@ -64,6 +64,7 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
   return (
     <BrandShell active="Competitors" companyName={context.companyName} email={context.email}>
       <header><p className={styles.eyebrow}>Campaign workspace · Research</p><h1 className={styles.appTitle}>Understand the competition</h1><p className={styles.appCopy}>Find relevant brands for {campaign.brand_name}, confirm the shortlist, then collect customer observations to shape your campaign.</p></header>
+      {query.created === "1" ? <p className={styles.evidenceNote} role="status">Campaign saved. You can return to this draft from Home.</p> : null}
       <nav aria-label="Campaign steps" className={styles.steps}>
         <div className={styles.step}><span className={styles.stepIcon}>✓</span><strong>Brand & campaign</strong></div><div className={styles.step}><span className={styles.stepIcon}>2</span><strong>Competition & evidence</strong></div><div className={styles.step}><span className={styles.stepIcon}>3</span><strong>Plan & creators</strong></div><div className={styles.step}><span className={styles.stepIcon}>4</span><strong>Creative</strong></div>
       </nav>

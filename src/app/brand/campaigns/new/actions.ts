@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { trackInfrastructureOperation } from "@/lib/providers/infrastructure";
 
 import { requireBrandContext } from "@/brand/context";
@@ -59,23 +60,24 @@ export async function createCampaignDraftAction(_state: {error:string}|null,form
   let logoKey: string | null = null;
 
   if (logoFile instanceof File && logoFile.size > 0) {
+    if (logoFile.size > 5 * 1024 * 1024) return {error:"Choose a logo smaller than 5 MB, or remove it to continue."};
     try {
       if (!["image/png","image/jpeg","image/webp"].includes(logoFile.type)) return {error:"Use a PNG, JPG or WebP logo."};
-      const uploaded=await trackInfrastructureOperation({provider:"supabase",operation:"upload_brand_logo",companyId:context.companyId,userId:context.userId,inputUnits:logoFile.size,unitType:"byte"},()=>uploadBrandAsset({companyId:context.companyId,slot:"primary_logo",file:logoFile}));
+      const uploaded=await trackInfrastructureOperation({provider:"supabase",operation:"upload_brand_logo",telemetry:"best_effort",companyId:context.companyId,userId:context.userId,inputUnits:logoFile.size,unitType:"byte"},()=>uploadBrandAsset({companyId:context.companyId,slot:"primary_logo",file:logoFile}));
       logoKey=uploaded.objectKey;
-    } catch { return {error:"The logo could not be uploaded. Check its format and 5 MB size limit, then retry."}; }
+    } catch { return {error:"The logo could not be uploaded. Retry, or remove the logo to save your campaign."}; }
   }
 
   const supabase = await createServerSupabaseClient();
   let createdId:string;
   try {
-    const data=await trackInfrastructureOperation({provider:"supabase",operation:"create_brand_campaign",companyId:context.companyId,userId:context.userId},async()=>{
+    const data=await trackInfrastructureOperation({provider:"supabase",operation:"create_brand_campaign",telemetry:"best_effort",companyId:context.companyId,userId:context.userId},async()=>{
       const result=await supabase
     .from("brand_campaigns")
     .insert({
       company_id: context.companyId,
       created_by: context.userId,
-      title: titleValue || `${brandName} campaign`,
+      title: titleValue || `${brandName} — ${promotedItem}`.slice(0, 120),
       brand_name: brandName,
       website_url: websiteUrl,
       logo_key: logoKey,
@@ -87,14 +89,20 @@ export async function createCampaignDraftAction(_state: {error:string}|null,form
     })
     .select("id")
     .single();
-      if(result.error||!result.data)throw new Error("campaign_save_failed");
+      if(result.error)throw result.error;
+      if(!result.data)throw new Error("campaign_save_failed");
       return result.data;
     });
     createdId=data.id;
-  } catch {
-    if(logoKey){try{await trackInfrastructureOperation({provider:"supabase",operation:"cleanup_brand_logo",companyId:context.companyId,userId:context.userId},()=>deleteBrandAsset(logoKey!));}catch{/* The failed operation remains recorded for cleanup. */}}
-    return {error:"The campaign draft could not be saved. Try again."};
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
+    console.error("[brand-campaign] Draft save failed", { code });
+    if(logoKey){try{await trackInfrastructureOperation({provider:"supabase",operation:"cleanup_brand_logo",telemetry:"best_effort",companyId:context.companyId,userId:context.userId},()=>deleteBrandAsset(logoKey!));}catch{console.error("[brand-campaign] Unused logo cleanup failed");}}
+    return {error:code === "42501"
+      ? "Your workspace access could not be verified. Sign in again and retry."
+      : "The campaign could not be saved. Your entries are still here; please retry."};
   }
 
-  redirect(`/brand/campaigns/${createdId}/competitors`);
+  revalidatePath("/brand/home");
+  redirect(`/brand/campaigns/${createdId}/competitors?created=1`);
 }

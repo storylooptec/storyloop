@@ -1,0 +1,90 @@
+import assert from 'node:assert/strict';
+import {mkdir} from 'node:fs/promises';
+import {chromium} from 'playwright';
+import {sessionCookie,campaignTestState} from './mock-supabase.mjs';
+
+const browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE_PATH||undefined,args:['--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-zygote'],headless:true});
+const context=await browser.newContext({viewport:{width:1440,height:900}});
+const page=await context.newPage();
+const errors=[];page.on('pageerror',error=>errors.push(error.message));
+const origin=process.env.BRAND_TEST_ORIGIN;
+await mkdir(new URL('./artifacts',import.meta.url),{recursive:true});
+const go=()=>page.goto(origin+'/brand/campaigns/new');
+const submit=()=>page.getByRole('button',{name:'Save & continue',exact:true}).click();
+try {
+ await context.addCookies([{name:'sb-127-auth-token',value:sessionCookie(),domain:'127.0.0.1',path:'/',sameSite:'Lax'}]);
+ await go();
+ const nav=page.getByRole('navigation',{name:'Brand workspace'});
+ const labels=await nav.getByRole('link').allTextContents();
+ assert(labels.at(-2).includes('Discover Creators'));
+ assert(labels.at(-1).includes('Reports'));
+ await page.goto(origin+'/brand/discover');
+ assert.equal(await nav.getByRole('link',{name:'Discover Creators'}).getAttribute('aria-current'),'page');
+ await go();
+ assert.equal(await page.locator('[name=brand_name]').inputValue(),'Sample Brand');
+ assert.equal(await page.locator('[name=website_url]').inputValue(),'https://example.test');
+ assert.equal(await page.locator('details').getAttribute('open'),null);
+ await page.locator('[name=brand_name]').fill('Aurelia');
+ await page.locator('[name=promoted_item]').fill('Daily sunscreen');
+ await submit();
+ await page.getByRole('alert').filter({hasText:'Select at least one deliverable.'}).waitFor();
+ assert.equal(await page.locator('[name=promoted_item]').inputValue(),'Daily sunscreen');
+ assert.equal(campaignTestState.campaignInserts,0);
+ await page.getByLabel('Instagram Reel',{exact:true}).check();
+ await page.locator('[name=objective]').selectOption('sales');
+ await page.locator('summary').click();
+ await page.locator('[name=budget_inr]').fill('12500.50');
+ campaignTestState.failCampaignWrites=true;
+ await submit();
+ await page.getByRole('alert').filter({hasText:'Your entries are still here'}).waitFor();
+ for(const [name,value]of [['brand_name','Aurelia'],['promoted_item','Daily sunscreen'],['objective','sales'],['budget_inr','12500.50']])assert.equal(await page.locator(`[name=${name}]`).inputValue(),value,name+' retained after failure');
+ assert(await page.getByLabel('Instagram Reel',{exact:true}).isChecked());
+ assert.equal(campaignTestState.campaignInserts,0);
+ campaignTestState.failCampaignWrites=false;
+ campaignTestState.failUsageWrites=true;
+ await submit();
+ await page.waitForURL('**/competitors?created=1');
+ await page.getByRole('status').filter({hasText:'Campaign saved.'}).waitFor();
+ assert.equal(campaignTestState.campaignInserts,1);
+ assert.equal(campaignTestState.lastCampaign.title,'Aurelia — Daily sunscreen');
+ assert.equal(campaignTestState.lastCampaign.requested_budget_cents,1250050);
+ await page.reload();
+ await page.getByText('Daily sunscreen',{exact:true}).waitFor();
+ await page.goto(origin+'/brand/home');
+ await page.getByRole('link',{name:'Aurelia — Daily sunscreen',exact:true}).waitFor();
+ console.log('PASS DB failure preserves values; retry saves once despite telemetry failure; draft visible after reload and on Home');
+
+ // Finalizing the log after a successful insert must not create a false failure or retry the insert.
+ campaignTestState.failUsageWrites=false;
+ campaignTestState.failUsageFinalization=true;
+ await go();
+ assert.equal(await page.locator('[name=brand_name]').inputValue(),'Aurelia');
+ await page.locator('[name=promoted_item]').fill('Summer collection');
+ await page.getByLabel('YouTube Short',{exact:true}).check();
+ await page.locator('summary').click();
+ await page.locator('[name=title]').fill('Custom launch');
+ await page.locator('[name=logo]').setInputFiles({name:'too-large.png',mimeType:'image/png',buffer:Buffer.alloc(5*1024*1024+1)});
+ await submit();
+ await page.getByRole('alert').filter({hasText:'smaller than 5 MB'}).waitFor();
+ assert.equal(campaignTestState.campaignInserts,1);
+ await page.getByRole('button',{name:'Remove logo'}).click();
+ await submit();
+ await page.waitForURL('**/competitors?created=1');
+ assert.equal(campaignTestState.campaignInserts,2);
+ assert.equal(campaignTestState.lastCampaign.title,'Custom launch');
+ assert.equal(campaignTestState.lastCampaign.requested_budget_cents,null);
+ console.log('PASS optional fields, logo size validation, generated/custom names, log finalization failure');
+
+ await go();
+ await page.locator('[name=promoted_item]').fill('Daily sunscreen');
+ await page.getByLabel('Instagram Reel',{exact:true}).check();
+ for(const [width,height,label]of [[1440,900,'desktop'],[390,844,'mobile'],[360,800,'small-mobile']]){
+   await page.setViewportSize({width,height});
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,label+' has no overflow');
+   await page.getByRole('button',{name:'Save & continue',exact:true}).scrollIntoViewIfNeeded();
+   assert(await page.getByRole('button',{name:'Save & continue',exact:true}).isVisible());
+   await page.screenshot({path:new URL(`./artifacts/campaign-setup-${label}.png`,import.meta.url).pathname,fullPage:true});
+ }
+ assert.deepEqual(errors,[]);
+ console.log('PASS navigation order/active state and desktop/mobile form layouts');
+} finally {await browser.close();}

@@ -7,10 +7,10 @@ import styles from "@/app/brand/brand.module.css";
 
 const links = [
   { href: "/brand/home", label: "Home", icon: "⌂" },
-  { href: "/brand/discover", label: "Discover", icon: "⌕" },
   { href: "/brand/competitors", label: "Competitors", icon: "◉" },
   { href: "/brand/plan", label: "Plan", icon: "▤" },
   { href: "/brand/create", label: "Create", icon: "✳" },
+  { href: "/brand/discover", label: "Discover Creators", icon: "⌕" },
   { href: "/brand/reports", label: "Reports", icon: "▥" },
 ];
 

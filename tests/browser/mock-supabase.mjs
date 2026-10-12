@@ -5,6 +5,7 @@ export const companyId='20000000-0000-4000-8000-000000000001';
 export const campaignId='30000000-0000-4000-8000-000000000001';
 const now=new Date().toISOString();
 const user={id:userId,email:'brand@example.test',aud:'authenticated',role:'authenticated',email_confirmed_at:now,app_metadata:{provider:'email',providers:['email']},user_metadata:{},created_at:now};
+export const campaignTestState={failCampaignWrites:false,failUsageWrites:false,failUsageFinalization:false,campaignInserts:0,lastCampaign:null};
 const fixtures={
  brand_memberships:[{company_id:companyId,user_id:userId,role:'owner',status:'active',created_at:now}],
  companies:[{id:companyId,name:'Sample Brand',slug:'sample-brand'}],
@@ -31,12 +32,20 @@ export function startMock(port=4545){return new Promise(resolve=>{const server=h
  if(url.pathname.startsWith('/rest/v1/rpc/')){res.end('[]');return;}
  const name=url.pathname.split('/').at(-1);let rows=structuredClone(fixtures[name]??[]);
  for(const [key,value]of url.searchParams){if(value.startsWith('eq.'))rows=rows.filter(r=>String(r[key])===value.slice(3));if(value.startsWith('in.(')){const values=value.slice(4,-1).split(',').map(x=>x.replaceAll('"',''));rows=rows.filter(r=>values.includes(String(r[key])));}}
+ if(name==='external_api_usage_events'&&((req.method==='POST'&&campaignTestState.failUsageWrites)||(req.method==='PATCH'&&campaignTestState.failUsageFinalization))){
+  res.statusCode=503;res.end(JSON.stringify({code:'PGRST000',message:'Simulated telemetry outage'}));return;
+ }
  if(req.method==='POST'&&name==='external_api_usage_events'){
   let body='';for await(const chunk of req)body+=chunk;const row={...JSON.parse(body),id:crypto.randomUUID()};fixtures.external_api_usage_events.push(row);rows=[row];res.statusCode=201;
  }
  if(req.method==='POST'&&name==='brand_campaigns'){
-  let body='';for await(const chunk of req)body+=chunk;const incoming=JSON.parse(body);const row={...fixtures.brand_campaigns[0],...incoming,id:'30000000-0000-4000-8000-000000000002'};fixtures.brand_campaigns.unshift(row);rows=[row];res.statusCode=201;
+  let body='';for await(const chunk of req)body+=chunk;const incoming=JSON.parse(body);
+  if(campaignTestState.failCampaignWrites){res.statusCode=503;res.end(JSON.stringify({code:'PGRST000',message:'Simulated database failure'}));return;}
+  campaignTestState.campaignInserts++;
+  const id='30000000-0000-4000-8000-'+String(campaignTestState.campaignInserts+1).padStart(12,'0');
+  const row={...fixtures.brand_campaigns[0],...incoming,id};campaignTestState.lastCampaign=row;fixtures.brand_campaigns.unshift(row);rows=[row];res.statusCode=201;
  }
+ if(req.method==='GET'&&url.searchParams.has('limit'))rows=rows.slice(0,Number(url.searchParams.get('limit')));
  res.setHeader('Content-Range',rows.length?`0-${rows.length-1}/${rows.length}`:'*/0');
  const object=(req.headers.accept??'').includes('application/vnd.pgrst.object+json');
  res.end(JSON.stringify(object?(rows[0]??null):rows));

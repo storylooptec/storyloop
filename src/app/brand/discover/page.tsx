@@ -57,7 +57,7 @@ export default async function BrandDiscoverPage({ searchParams }: Props) {
     return `/brand/discover?${query}`;
   };
 
-  return <BrandShell active="Discover" companyName={context.companyName} email={context.email}>
+  return <BrandShell active="Discover Creators" companyName={context.companyName} email={context.email}>
     <header><p className={styles.eyebrow}>Campaign workspace · Discover</p>
       <h1 className={styles.appTitle}>Find your campaign’s creators</h1>
       <p className={styles.appCopy}>Explore consented profiles, choose deliverables, and see exactly how your selected Storyloop rates add up.</p>

@@ -33,13 +33,13 @@ await page.goto(origin+'/brand/campaigns/new');await page.screenshot({path:new U
 // Exercise server-action validation and the persisted draft redirect against fixtures.
 await page.locator('[name=brand_name]').fill('Test Brand');
 await page.locator('[name=promoted_item]').fill('Summer moisturizer');
-await page.getByRole('button',{name:'Save and continue to competitors'}).click();
+await page.getByRole('button',{name:'Save & continue'}).click();
 await page.getByRole('alert').filter({hasText:'Select at least one deliverable.'}).waitFor();
 await page.locator('[name=brand_name]').fill('Test Brand');
 await page.locator('[name=promoted_item]').fill('Summer moisturizer');
 const checkbox=page.getByLabel('Instagram Reel',{exact:true});const box=await checkbox.boundingBox();assert(box.width<=20&&box.height<=20,'deliverable checkbox remains compact on mobile');await checkbox.check();
-await page.getByRole('button',{name:'Save and continue to competitors'}).click();
-await page.waitForURL('**/brand/campaigns/30000000-0000-4000-8000-000000000002/competitors');
+await page.getByRole('button',{name:'Save & continue'}).click();
+await page.waitForURL('**/brand/campaigns/30000000-0000-4000-8000-000000000002/competitors?created=1');
 assert.equal(await page.locator('h1').innerText(),'Understand the competition');
 assert.deepEqual(errors,[],'no browser uncaught exceptions');
 await browser.close();console.log('PASS unauthenticated redirect, login forms,8 protected routes,7 mobile routes, draft validation and submission, no console page errors');
