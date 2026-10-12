@@ -16,6 +16,15 @@ export function classifyR2LogoError(error: unknown): Failure {
   }
   if (name === "NoSuchKey") return { code: "object_not_found", status: 404 };
   if (name === "NoSuchBucket") return { code: "bucket_not_found", status: 502 };
+  if (name === "InvalidArgument") {
+    // Match provider wording, but never copy that wording into the response.
+    if (/credential access key has length/i.test(message)) return { code: "access_key_id_length_invalid", status: 502 };
+    if (/credential region/i.test(message)) return { code: "credential_region_invalid", status: 502 };
+    if (/credential service/i.test(message)) return { code: "credential_service_invalid", status: 502 };
+    if (/credential date|date header|x-amz-date/i.test(message)) return { code: "credential_date_invalid", status: 502 };
+    if (/signedheaders/i.test(message)) return { code: "signed_headers_invalid", status: 502 };
+    if (/authorization|credential/i.test(message)) return { code: "authorization_invalid", status: 502 };
+  }
   if (["InvalidArgument", "InvalidRequest", "AuthorizationHeaderMalformed", "InvalidEndpoint", "PermanentRedirect"].includes(name)) {
     return { code: "request_invalid", status: 502 };
   }

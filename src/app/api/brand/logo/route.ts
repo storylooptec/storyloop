@@ -2,6 +2,7 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 
 import { getR2Client } from "@/lib/r2/client";
 import { getR2Config } from "@/lib/r2/config";
+import { r2ConfigurationIssues } from "@/lib/r2/config-diagnostics";
 import { r2LogoFailureResponse, type R2LogoStage } from "@/lib/r2/logo-error";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -33,8 +34,10 @@ export async function GET(request: Request) {
   if (!key) return new Response("Logo not configured", { status: 404 });
 
   let stage: R2LogoStage = "configuration";
+  let configIssues: string[] | null = null;
   try {
     const config = getR2Config();
+    configIssues = r2ConfigurationIssues(config);
     stage = "client";
     const client = getR2Client();
     stage = "request";
@@ -57,6 +60,8 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    return r2LogoFailureResponse(error, stage);
+    const response = r2LogoFailureResponse(error, stage);
+    response.headers.set("X-Storyloop-R2-Configuration", configIssues === null ? "not_checked" : configIssues.join(",") || "format_checks_passed");
+    return response;
   }
 }
