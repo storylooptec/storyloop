@@ -14,6 +14,8 @@ test("R2 logo errors distinguish a missing object from bucket, authorization and
     [{ name: "TimeoutError" }, "connection_timeout", 504],
     [{ name: "SlowDown" }, "service_unavailable", 503],
     [{ code: "ERR_INVALID_URL" }, "configuration_invalid", 502],
+    [{ name: "InvalidArgument" }, "request_invalid", 502],
+    [new Error("Checksum mismatch: expected secret-checksum"), "integrity_check_failed", 502],
     [new Error("Missing required environment variable: R2_SECRET_ACCESS_KEY"), "configuration_missing", 503],
     [{ $metadata: { httpStatusCode: 404 } }, "request_failed", 502],
     [null, "request_failed", 502],
@@ -35,7 +37,10 @@ test("R2 failure responses and logs contain only fixed categories, never provide
     assert.equal(await response.text(), "Logo unavailable");
     assert.equal(response.headers.get("x-storyloop-asset-error"), "request_failed");
     assert.equal(response.headers.get("cache-control"), "private, no-store");
-    assert.deepEqual(logs, [["R2 logo read failed", { code: "request_failed", status: 502 }]]);
+    assert.equal(response.headers.get("x-storyloop-asset-stage"), "request");
+    assert.equal(response.headers.get("x-storyloop-asset-error-type"), "unclassified");
+    assert.equal(response.headers.get("x-storyloop-asset-upstream-status"), "500");
+    assert.deepEqual(logs, [["R2 logo read failed", { code: "request_failed", status: 502, stage: "request", errorType: "unclassified", upstreamStatus: 500 }]]);
     assert.ok(!JSON.stringify([...response.headers]).includes("untrusted-secret-value"));
   } finally { console.error = original; }
 });

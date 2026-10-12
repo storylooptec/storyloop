@@ -2,7 +2,7 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 
 import { getR2Client } from "@/lib/r2/client";
 import { getR2Config } from "@/lib/r2/config";
-import { r2LogoFailureResponse } from "@/lib/r2/logo-error";
+import { r2LogoFailureResponse, type R2LogoStage } from "@/lib/r2/logo-error";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -32,17 +32,23 @@ export async function GET(request: Request) {
 
   if (!key) return new Response("Logo not configured", { status: 404 });
 
+  let stage: R2LogoStage = "configuration";
   try {
     const config = getR2Config();
-    const result = await getR2Client().send(
+    stage = "client";
+    const client = getR2Client();
+    stage = "request";
+    const result = await client.send(
       new GetObjectCommand({ Bucket: config.bucket, Key: key }),
     );
 
-    if (!result.Body) return r2LogoFailureResponse(new Error("Empty R2 response"));
+    stage = "body";
+    if (!result.Body) return r2LogoFailureResponse(new Error("Empty R2 response"), stage);
 
     const bytes = await result.Body.transformToByteArray();
     const body = Uint8Array.from(bytes).buffer;
 
+    stage = "response";
     return new Response(body, {
       headers: {
         "Content-Type": result.ContentType ?? "image/webp",
@@ -51,6 +57,6 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    return r2LogoFailureResponse(error);
+    return r2LogoFailureResponse(error, stage);
   }
 }
