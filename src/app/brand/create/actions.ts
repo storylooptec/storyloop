@@ -88,13 +88,18 @@ export async function generateCampaignScriptsAction(formData: FormData) {
         generated_model: model, approval_state: "draft", updated_at: now,
       })
     : { error: new Error("no_creative") };
+  const inputRate = Number(process.env.OPENAI_INPUT_COST_PER_1M_USD);
+  const outputRate = Number(process.env.OPENAI_OUTPUT_COST_PER_1M_USD);
+  const estimatedCost = result && Number.isFinite(inputRate) && Number.isFinite(outputRate)
+    ? ((result.usage?.prompt_tokens ?? 0) * inputRate + (result.usage?.completion_tokens ?? 0) * outputRate) / 1_000_000
+    : null;
   await supabase.from("external_api_usage_events").insert({
     company_id: ctx.companyId, campaign_id: campaign.id, actor_user_id: ctx.userId,
     provider_key: "openai", operation: "generate_campaign_scripts", model,
     status: insert.error ? (failure === "provider_rate_limited" ? "rate_limited" : "failed") : "success",
     latency_ms: Date.now() - started, retry_count: retryCount, cache_hit: false,
     input_units: result?.usage?.prompt_tokens ?? null,
-    output_units: result?.usage?.completion_tokens ?? null, unit_type: "token",
+    output_units: result?.usage?.completion_tokens ?? null, unit_type: "token", estimated_cost_usd: estimatedCost,
     failure_code: insert.error ? failure : null,
   });
   if (insert.error) redirect("/brand/create?campaign=" + campaign.id + "&error=" + (failure === "provider_rate_limited" ? "provider_limit" : "generation"));
