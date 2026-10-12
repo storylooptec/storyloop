@@ -5,6 +5,7 @@ export const companyId='20000000-0000-4000-8000-000000000001';
 export const campaignId='30000000-0000-4000-8000-000000000001';
 const now=new Date().toISOString();
 const user={id:userId,email:'brand@example.test',aud:'authenticated',role:'authenticated',email_confirmed_at:now,app_metadata:{provider:'email',providers:['email']},user_metadata:{},created_at:now};
+export const researchTestState={failScanRead:false};
 export const campaignTestState={failCampaignWrites:false,failUsageWrites:false,failUsageFinalization:false,campaignInserts:0,lastCampaign:null};
 const fixtures={
  brand_memberships:[{company_id:companyId,user_id:userId,role:'owner',status:'active',created_at:now}],
@@ -30,7 +31,9 @@ export function startMock(port=4545){return new Promise(resolve=>{const server=h
  }
  if(url.pathname==='/auth/v1/logout'){res.end('{}');return;}
  if(url.pathname.startsWith('/rest/v1/rpc/')){res.end('[]');return;}
- const name=url.pathname.split('/').at(-1);let rows=structuredClone(fixtures[name]??[]);
+ const name=url.pathname.split('/').at(-1);
+ if(name==='brand_competitor_scans'&&req.method==='GET'&&url.searchParams.has('query_hash')&&researchTestState.failScanRead){res.statusCode=503;res.end(JSON.stringify({code:'PGRST000',message:'Simulated research startup database error'}));return;}
+ let rows=structuredClone(fixtures[name]??[]);
  for(const [key,value]of url.searchParams){if(value.startsWith('eq.'))rows=rows.filter(r=>String(r[key])===value.slice(3));if(value.startsWith('in.(')){const values=value.slice(4,-1).split(',').map(x=>x.replaceAll('"',''));rows=rows.filter(r=>values.includes(String(r[key])));}}
  if(name==='external_api_usage_events'&&((req.method==='POST'&&campaignTestState.failUsageWrites)||(req.method==='PATCH'&&campaignTestState.failUsageFinalization))){
   res.statusCode=503;res.end(JSON.stringify({code:'PGRST000',message:'Simulated telemetry outage'}));return;

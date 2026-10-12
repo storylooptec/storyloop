@@ -100,24 +100,45 @@ async function persistCandidate(context: SearchContext, scanId: string, candidat
 }
 
 export async function runCompetitorScanAction(form: FormData) {
-  const { context, campaign, auth } = await campaignContext(form);
+  // Authentication redirects stay outside the error boundary. Finish only after it,
+  // because Next.js implements redirects by throwing a control-flow exception.
+  const authorized = await campaignContext(form);
+  let state: string;
+  try {
+    state = await runCompetitorScan(authorized);
+  } catch (error) {
+    const code = error instanceof Error && error.message === "trusted_database_not_configured"
+      ? "research_not_configured"
+      : error instanceof ProviderError ? error.code : "research_unavailable";
+    console.error("[brand-research] Scan failed", { campaignId: authorized.campaign.id, code });
+    state = `error=${encodeURIComponent(code)}`;
+  }
+  finish(authorized.campaign.id, state);
+}
+
+async function runCompetitorScan({ context, campaign, auth }: Awaited<ReturnType<typeof campaignContext>>): Promise<string> {
   const db = createServiceSupabaseClient();
   const ownDomain = campaign.website_url ? domainOf(campaign.website_url) : null;
   const queryHash = contentHash(JSON.stringify(["entities-v2", campaign.brand_name, campaign.promoted_item, ownDomain, "IN", "en"]));
-  const { data: cached } = await db.from("brand_competitor_scans").select("id").eq("company_id", context.companyId).eq("campaign_id", campaign.id).eq("query_hash", queryHash).eq("status", "succeeded").is("error_code", null).gte("completed_at", new Date(Date.now() - SEARCH_CACHE_MS).toISOString()).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const { data: cached, error: cacheError } = await db.from("brand_competitor_scans").select("id").eq("company_id", context.companyId).eq("campaign_id", campaign.id).eq("query_hash", queryHash).eq("status", "succeeded").is("error_code", null).gte("completed_at", new Date(Date.now() - SEARCH_CACHE_MS).toISOString()).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (cacheError) throw databaseFailure(cacheError);
   if (cached) {
     await recordCachedOperation({ ...context, provider: "serpapi", operation: "competitor_scan" });
-    finish(campaign.id, "cached=1");
+    return "cached=1";
   }
-  if (!process.env.SERP_API_KEY || process.env.SERP_API_ENABLED !== "true" || !process.env.OPENAI_API_KEY) finish(campaign.id, "error=provider_not_configured");
+  if (!process.env.SERP_API_KEY || process.env.SERP_API_ENABLED !== "true" || !process.env.OPENAI_API_KEY || process.env.OPENAI_API_ENABLED === "false") return "error=provider_not_configured";
   // A serverless invocation can die; only expire locks older than the action's maximum lifetime.
-  await db.from("brand_competitor_scans").update({ status: "failed", error_code: "scan_expired", completed_at: new Date().toISOString() }).eq("campaign_id", campaign.id).eq("company_id", context.companyId).in("status", ["running", "queued"]).lt("started_at", new Date(Date.now() - 15 * 60 * 1000).toISOString());
+  const { error: expiryError } = await db.from("brand_competitor_scans").update({ status: "failed", error_code: "scan_expired", completed_at: new Date().toISOString() }).eq("campaign_id", campaign.id).eq("company_id", context.companyId).in("status", ["running", "queued"]).lt("started_at", new Date(Date.now() - 15 * 60 * 1000).toISOString());
+  if (expiryError) throw databaseFailure(expiryError);
   const { data: scan, error: lockError } = await db.from("brand_competitor_scans").insert({ company_id: context.companyId, campaign_id: campaign.id, created_by: context.userId, status: "running", query_hash: queryHash, market: "IN", started_at: new Date().toISOString() }).select("id").single();
-  if (lockError || !scan) finish(campaign.id, "error=scan_running");
+  if (lockError?.code === "23505") return "error=scan_running";
+  if (lockError) throw databaseFailure(lockError);
+  if (!scan) throw new ProviderError("evidence_save_failed");
   const { data: allowed, error: quotaError } = await auth.rpc("consume_serpapi_scan_quota", { target_company_id: context.companyId });
   if (quotaError || !allowed) {
-    await db.from("brand_competitor_scans").update({ status: "failed", error_code: "scan_daily_limit", completed_at: new Date().toISOString() }).eq("id", scan.id).eq("company_id", context.companyId);
-    finish(campaign.id, "error=scan_daily_limit");
+    await db.from("brand_competitor_scans").update({ status: "failed", error_code: quotaError ? "evidence_save_failed" : "scan_daily_limit", completed_at: new Date().toISOString() }).eq("id", scan.id).eq("company_id", context.companyId);
+    if (quotaError) throw databaseFailure(quotaError);
+    return "error=scan_daily_limit";
   }
   let failure: string | null = null;
   try {
@@ -159,7 +180,7 @@ export async function runCompetitorScanAction(form: FormData) {
     await db.from("brand_competitor_scans").update({ status: "failed", error_code: failure, completed_at: new Date().toISOString() }).eq("id", scan.id).eq("company_id", context.companyId);
   }
   revalidatePath("/brand/home");
-  finish(campaign.id, failure ? `error=${encodeURIComponent(failure)}` : "scanned=1");
+  return failure ? `error=${encodeURIComponent(failure)}` : "scanned=1";
 }
 
 export async function reviewCompetitorAction(form: FormData) {

@@ -23,5 +23,5 @@ try{
  if(!ready)throw new Error('Next server did not start: '+output);
  process.env.BRAND_TEST_ORIGIN=origin;
  if(missingSiteUrl)console.log('Testing registration with NEXT_PUBLIC_SITE_URL absent and a fixture deployment URL');
- await import(process.argv.includes('--campaign') ? './campaign.mjs' : process.argv.includes('--homepage') ? './home.mjs' : './smoke.mjs');
+ await import(process.argv.includes('--competition') ? './competition.mjs' : process.argv.includes('--campaign') ? './campaign.mjs' : process.argv.includes('--homepage') ? './home.mjs' : './smoke.mjs');
 }finally{server.kill('SIGTERM');fixture.close();}

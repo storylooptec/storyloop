@@ -14,6 +14,8 @@ type Props = { params: Promise<{ campaignId: string }>; searchParams: Promise<{ 
 const when = (value: string) => new Date(value).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 function errorMessage(code?: string) {
   if (!code) return "";
+  if (code === "research_not_configured") return "Competitor research is not connected yet. Your campaign is saved. Ask your admin to complete the research connection.";
+  if (code === "research_unavailable" || code === "evidence_save_failed") return "Research could not start or finish. Your campaign is saved. Please retry; if this continues, ask your admin to check the research connection.";
   if (/limit|quota|budget/.test(code)) return "This workspace's request or spending limit has been reached. Your saved evidence is still available. Admin can check the usage window.";
   if (/configured|disabled|auth_failed/.test(code)) return "Research is not available in this environment yet. Your campaign is saved; Admin can check the provider connection.";
   if (code === "scan_running") return "Research is already running. Refresh this page shortly to see the result.";
