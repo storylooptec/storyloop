@@ -16,6 +16,21 @@ type Brief = {
   must_include: string[];
   must_avoid: string[];
 };
+function isBrief(value: unknown): value is Brief {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  const claimsValid = (claims: unknown) => Array.isArray(claims) && claims.every((claim) =>
+    Boolean(claim && typeof claim === "object"
+      && typeof (claim as Record<string, unknown>).statement === "string"
+      && Array.isArray((claim as Record<string, unknown>).evidence_ids)
+      && ((claim as Record<string, unknown>).evidence_ids as unknown[]).every((id) => typeof id === "string")),
+  );
+  const stringsValid = (items: unknown) => Array.isArray(items) && items.every((entry) => typeof entry === "string");
+  return typeof item.summary === "string"
+    && claimsValid(item.pain_areas) && claimsValid(item.usp_hypotheses)
+    && typeof item.recommended_angle === "string" && typeof item.creator_brief === "string"
+    && stringsValid(item.must_include) && stringsValid(item.must_avoid);
+}
 
 export async function generateCampaignBriefAction(formData: FormData) {
   const ctx = await requireBrandContext();
@@ -122,7 +137,18 @@ export async function generateCampaignBriefAction(formData: FormData) {
   }
 
   let brief: Brief;
-  try { brief = JSON.parse(raw) as Brief; } catch { redirect("/brand/plan?campaign=" + campaign.id + "&error=generation"); }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isBrief(parsed)) throw new Error("invalid_brief");
+    brief = parsed;
+  } catch {
+    await supabase.from("external_api_usage_events").insert({
+      company_id: ctx.companyId, campaign_id: campaign.id, actor_user_id: ctx.userId,
+      provider_key: "openai", operation: "generate_campaign_brief", model, status: "failed",
+      latency_ms: Date.now() - started, retry_count: retryCount, failure_code: "invalid_structured_output",
+    });
+    redirect("/brand/plan?campaign=" + campaign.id + "&error=generation");
+  }
   const validIds = new Set(evidence.map((item) => item.id));
   for (const claim of [...brief.pain_areas, ...brief.usp_hypotheses]) {
     claim.evidence_ids = [...new Set(claim.evidence_ids)].filter((id) => validIds.has(id));
