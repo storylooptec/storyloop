@@ -78,7 +78,14 @@ export async function generateCampaignScriptsAction(formData: FormData) {
   if (raw) {
     try {
       const parsed = JSON.parse(raw) as { concepts?: unknown[] };
-      if (Array.isArray(parsed.concepts) && parsed.concepts.length === 3) content = parsed;
+      const validConcepts = parsed.concepts?.every((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+        const concept = item as Record<string, unknown>;
+        return ["angle", "hook", "script", "cta", "format"].every((key) =>
+          typeof concept[key] === "string" && Boolean((concept[key] as string).trim()),
+        );
+      });
+      if (Array.isArray(parsed.concepts) && parsed.concepts.length === 3 && validConcepts) content = parsed;
     } catch { /* logged below */ }
   }
   const now = new Date().toISOString();
