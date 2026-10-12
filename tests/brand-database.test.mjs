@@ -62,6 +62,13 @@ async function finish(event, status = "success", extra = {}) {
 
 before(async () => {
   await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
+    create schema storage;
+    create table storage.buckets(id text primary key,name text,public boolean default false,file_size_limit bigint,allowed_mime_types text[]);
+    create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text references storage.buckets,name text);
+    alter table storage.objects enable row level security;
+    alter table storage.buckets enable row level security;
+    grant usage on schema storage to anon,authenticated,service_role;
+    grant all on all tables in schema storage to anon,authenticated,service_role;
     create schema auth;
     create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,is_anonymous boolean default false,raw_user_meta_data jsonb default '{}');
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
@@ -305,4 +312,19 @@ scenario("launch freezes competitor, product and observation writes even from th
   await fails("update brand_competitor_observations set source_snippet='Changed after launch' where id=$1",[id.evidenceA],/immutable/);
   assert.equal((await one("select status from brand_competitors where id=$1",[id.competitorA])).status,"confirmed");
   assert.equal((await one("select status from brand_competitor_products where id=$1",[product.id])).status,"candidate");
+});
+
+scenario('Supabase asset buckets are private and direct client file access is denied', async () => {
+  const buckets = (await q("select id,public,file_size_limit from storage.buckets order by id")).rows;
+  assert.deepEqual(buckets.map(b=>[b.id,b.public,Number(b.file_size_limit)]), [['storyloop-brand-assets',false,5242880],['storyloop-private-media',false,52428800]]);
+  // Metadata-only fixture in isolated WASM Postgres, never a live Storage write.
+  await q("insert into storage.objects(bucket_id,name) values('storyloop-private-media','private/test.png')");
+  for (const client of ['anon','authenticated']) {
+    await role(client,id.userA);
+    assert.equal((await one('select count(*)::int as n from storage.objects')).n,0);
+    await fails("insert into storage.objects(bucket_id,name) values('storyloop-private-media','forged.png')");
+    assert.equal((await q("delete from storage.objects returning id")).rows.length,0);
+  }
+  await role('service_role');
+  assert.equal((await one('select count(*)::int as n from storage.objects')).n,1);
 });

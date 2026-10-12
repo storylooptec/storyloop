@@ -1,4 +1,5 @@
 import "server-only";
+import { storageConfigured } from "@/lib/storage/config";
 
 import { safeProviderStatusUrl, type PreviewKind } from "@/brand/creative";
 import { ProviderError } from "@/lib/providers/runtime";
@@ -23,8 +24,7 @@ export function higgsfieldConfiguration(): { ready: boolean; reason: string; max
   if (!auth()) return { ready: false, reason: "The preview provider needs both its key ID and key secret.", maxUsd: 0 };
   if (!Number.isFinite(maxUsd) || maxUsd <= 0 || maxUsd > 100) return { ready: false, reason: "An administrator must configure the maximum preview cost.", maxUsd: 0 };
   if (!process.env.HIGGSFIELD_MEDIA_ALLOWED_HOSTS?.trim()) return { ready: false, reason: "Preview media storage must be configured before generation.", maxUsd };
-  if (!process.env.R2_PRIVATE_BUCKET_NAME || !process.env.R2_BUCKET_NAME || !process.env.R2_ACCOUNT_ID || !process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY) return { ready: false, reason: "Preview storage is not configured.", maxUsd };
-  if (process.env.R2_PRIVATE_BUCKET_NAME === process.env.R2_BUCKET_NAME && process.env.R2_PUBLIC_BASE_URL) return { ready: false, reason: "Creator photos and previews require a separate private storage bucket.", maxUsd };
+  if (!storageConfigured()) return { ready: false, reason: "Preview storage is not configured.", maxUsd };
   return { ready: true, reason: "", maxUsd };
 }
 

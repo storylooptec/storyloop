@@ -1,11 +1,7 @@
-import {
-  DeleteObjectCommand,
-  PutObjectCommand,
-} from "@aws-sdk/client-s3";
+import "server-only";
 import { randomUUID } from "node:crypto";
-
-import { getR2Client } from "@/lib/r2/client";
-import { getR2Config } from "@/lib/r2/config";
+import { BRAND_ASSETS_BUCKET } from "@/lib/storage/config";
+import { uploadStorageObject, deleteStorageObject } from "@/lib/storage/objects";
 
 export const BRAND_ASSET_SLOTS = [
   "primary_logo",
@@ -115,36 +111,17 @@ export async function uploadBrandAsset(input: {
     `${Date.now()}-${randomUUID()}-${safeName}.${extension}`,
   ].join("/");
 
-  const config = getR2Config();
-
-  await getR2Client().send(
-    new PutObjectCommand({
-      Bucket: config.bucket,
-      Key: objectKey,
-      Body: body,
-      ContentType: input.file.type,
-      CacheControl: "public, max-age=31536000, immutable",
-    }),
-  );
+  await uploadStorageObject(BRAND_ASSETS_BUCKET, objectKey, body, input.file.type);
 
   return {
     objectKey,
     contentType: input.file.type,
     sizeBytes: input.file.size,
     originalFilename: input.file.name,
-    publicUrl: config.publicBaseUrl
-      ? `${config.publicBaseUrl.replace(/\/$/, "")}/${objectKey}`
-      : null,
+    publicUrl: null,
   };
 }
 
 export async function deleteBrandAsset(objectKey: string): Promise<void> {
-  const config = getR2Config();
-
-  await getR2Client().send(
-    new DeleteObjectCommand({
-      Bucket: config.bucket,
-      Key: objectKey,
-    }),
-  );
+  await deleteStorageObject(BRAND_ASSETS_BUCKET, objectKey);
 }

@@ -28,12 +28,11 @@ function objectValue(
 
 function assetMeta(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { filename: "No file uploaded", publicUrl: null as string | null };
+    return { filename: "No file uploaded" };
   }
   const record = value as Record<string, unknown>;
   return {
     filename: typeof record.originalFilename === "string" ? record.originalFilename : "Uploaded",
-    publicUrl: typeof record.publicUrl === "string" ? record.publicUrl : null,
   };
 }
 
@@ -41,6 +40,7 @@ function UploadControl({
   title,
   slot,
   metadata,
+  objectKey,
   editable,
   accept,
   guidance,
@@ -48,21 +48,23 @@ function UploadControl({
   title: string;
   slot: string;
   metadata: unknown;
+  objectKey: string | null;
   editable: boolean;
   accept: string;
   guidance: string;
 }) {
   const asset = assetMeta(metadata);
-  const hasAsset = asset.filename !== "No file uploaded";
+  const hasAsset = Boolean(objectKey);
+  const previewSlot = slot.replace("_logo", "");
 
   return (
     <article className="brand-upload-card">
       <div className="brand-asset-preview">
-        {asset.publicUrl ? (
+        {hasAsset ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={asset.publicUrl} alt={`${title} preview`} />
+          <img src={`/api/brand/logo?slot=${previewSlot}&v=${encodeURIComponent(objectKey ?? "")}`} alt={`${title} preview`} />
         ) : (
-          <span className="sl-system-label">{hasAsset ? "Stored in R2" : "Empty"}</span>
+          <span className="sl-system-label">Empty</span>
         )}
       </div>
 
@@ -142,14 +144,14 @@ export default async function BrandSettingsPage({ searchParams }: Props) {
         <div className="settings-section-heading">
           <div>
             <h2>Identity assets</h2>
-            <p className="settings-help">Stored in Cloudflare R2. Replace and remove actions update the existing metadata model.</p>
+            <p className="settings-help">Upload logos and icons up to 5 MB. Replace a file to update it across Storyloop.</p>
           </div>
         </div>
         <div className="brand-upload-grid">
-          <UploadControl title="Primary logo" slot="primary_logo" metadata={settings.primary_logo_meta} editable={editable} accept="image/png,image/jpeg,image/webp" guidance="PNG, JPG or WebP. Keep a transparent master where possible." />
-          <UploadControl title="Dark logo" slot="dark_logo" metadata={settings.dark_logo_meta} editable={editable} accept="image/png,image/jpeg,image/webp" guidance="For dark surfaces. PNG, JPG or WebP." />
-          <UploadControl title="Light logo" slot="light_logo" metadata={settings.light_logo_meta} editable={editable} accept="image/png,image/jpeg,image/webp" guidance="For light surfaces. PNG, JPG or WebP." />
-          <UploadControl title="Favicon" slot="favicon" metadata={settings.favicon_meta} editable={editable} accept="image/png,image/x-icon,image/vnd.microsoft.icon" guidance="PNG or ICO. Prefer a simple square mark." />
+          <UploadControl title="Primary logo" slot="primary_logo" metadata={settings.primary_logo_meta} objectKey={settings.primary_logo_key} editable={editable} accept="image/png,image/jpeg,image/webp" guidance="PNG, JPG or WebP. Keep a transparent master where possible." />
+          <UploadControl title="Dark logo" slot="dark_logo" metadata={settings.dark_logo_meta} objectKey={settings.dark_logo_key} editable={editable} accept="image/png,image/jpeg,image/webp" guidance="For dark surfaces. PNG, JPG or WebP." />
+          <UploadControl title="Light logo" slot="light_logo" metadata={settings.light_logo_meta} objectKey={settings.light_logo_key} editable={editable} accept="image/png,image/jpeg,image/webp" guidance="For light surfaces. PNG, JPG or WebP." />
+          <UploadControl title="Favicon" slot="favicon" metadata={settings.favicon_meta} objectKey={settings.favicon_key} editable={editable} accept="image/png,image/x-icon,image/vnd.microsoft.icon" guidance="PNG or ICO. Prefer a simple square mark." />
         </div>
       </section>
 

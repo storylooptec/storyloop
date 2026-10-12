@@ -1,3 +1,4 @@
+import { storageConfigured } from "@/lib/storage/config";
 import Link from "next/link";
 import { SubmitButton } from "@/components/brand/submit-button";
 import { requireCreatorContext } from "@/creator/context";
@@ -11,7 +12,7 @@ type Props = { searchParams: Promise<{ error?: string; saved?: string }> };
 export default async function CreatorBrandRequestsPage({ searchParams }: Props) {
   const [context, params] = await Promise.all([requireCreatorContext(), searchParams]);
   const db = await createServerSupabaseClient();
-  const storageReady = Boolean(process.env.R2_PRIVATE_BUCKET_NAME && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_ACCOUNT_ID);
+  const storageReady = storageConfigured();
   const { data: requests, error } = context.demoMode ? { data: [], error: null } : await db.from("brand_preview_requests").select("*").eq("creator_id", context.account.creator_id).order("created_at", { ascending: false }).limit(50);
   const { data: jobs } = !context.demoMode && requests?.length ? await db.from("brand_preview_jobs").select("id,request_id,status,kind").in("request_id", requests.map((request) => request.id)) : { data: [] };
   // eslint-disable-next-line react-hooks/purity -- Authenticated server render uses one request timestamp; actions independently enforce expiry.

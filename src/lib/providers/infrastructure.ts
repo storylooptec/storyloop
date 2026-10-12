@@ -1,7 +1,7 @@
 import "server-only";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
-type InfrastructureContext={provider:"r2"|"supabase";operation:string;companyId:string;campaignId?:string|null;userId:string;inputUnits?:number;unitType?:string};
+type InfrastructureContext={provider:"supabase";operation:string;companyId:string;campaignId?:string|null;userId:string;inputUnits?:number;unitType?:string};
 /** Callers authorize the actor and resource first. Log logical writes, never secrets or private file URLs. */
 export async function trackInfrastructureOperation<T>(input:InfrastructureContext,work:()=>Promise<T>):Promise<T>{
  const db=createServiceSupabaseClient();

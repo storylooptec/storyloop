@@ -230,7 +230,7 @@ export async function refreshCampaignPreviewAction(formData: FormData) {
     if (result.status === "completed" && result.mediaUrl) {
       await service.from("brand_preview_job_private").update({ output_url: result.mediaUrl }).eq("job_id", job.id);
       await service.from("brand_preview_jobs").update({ status: "completed_pending_archive", updated_at: new Date().toISOString() }).eq("id", job.id);
-      const archived = await trackInfrastructureOperation({ provider: "r2", operation: "archive_preview", companyId: ctx.companyId, campaignId: campaign.id, userId: ctx.userId, inputUnits: 1, unitType: "object" }, () => archivePreviewOutput({ jobId: job.id, companyId: ctx.companyId, kind: job.kind, url: result.mediaUrl! }));
+      const archived = await trackInfrastructureOperation({ provider: "supabase", operation: "archive_preview", companyId: ctx.companyId, campaignId: campaign.id, userId: ctx.userId, inputUnits: 1, unitType: "object" }, () => archivePreviewOutput({ jobId: job.id, companyId: ctx.companyId, kind: job.kind, url: result.mediaUrl! }));
       await service.from("brand_preview_jobs").update({ status: "completed", media_object_key: archived.key, media_content_type: archived.contentType, completed_at: new Date().toISOString(), failure_code: null, updated_at: new Date().toISOString() }).eq("id", job.id);
     } else {
       await service.from("brand_preview_jobs").update({ status: result.status, updated_at: new Date().toISOString(), failure_code: ["failed", "nsfw", "canceled"].includes(result.status) ? `provider_${result.status}` : null }).eq("id", job.id);

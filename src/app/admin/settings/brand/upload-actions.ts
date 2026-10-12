@@ -11,7 +11,7 @@ import {
   deleteBrandAsset,
   type BrandAssetSlot,
   uploadBrandAsset,
-} from "@/lib/r2/brand-assets";
+} from "@/lib/storage/brand-assets";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function isBrandAssetSlot(value: string): value is BrandAssetSlot {
@@ -249,7 +249,7 @@ export async function removeBrandAssetAction(formData: FormData) {
   try {
     await deleteBrandAsset(oldObjectKey);
   } catch {
-    // Metadata is authoritative. R2 cleanup can be retried operationally.
+    // Metadata is authoritative. Storage cleanup can be retried operationally.
   }
 
   revalidatePath("/admin/settings/brand");

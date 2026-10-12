@@ -23,7 +23,7 @@ export async function respondToBrandPreviewAction(formData: FormData) {
     const { error } = await service.from("brand_preview_requests").update({ status: decision === "revoke" ? "revoked" : "rejected", updated_at: new Date().toISOString() }).eq("id", request.id).eq("status", request.status).eq("creator_id", context.account.creator_id);
     if (error) redirect("/creator/brand-requests?error=save");
     // Access is revoked in DB first. Object cleanup is best effort and never restores access.
-    if (request.reference_object_key) await trackInfrastructureOperation({ provider: "r2", operation: "delete_revoked_creator_reference", companyId: request.company_id, campaignId: request.campaign_id, userId: context.userId, inputUnits: 1, unitType: "object" }, () => deletePreviewAsset(request.reference_object_key!)).catch(() => undefined);
+    if (request.reference_object_key) await trackInfrastructureOperation({ provider: "supabase", operation: "delete_revoked_creator_reference", companyId: request.company_id, campaignId: request.campaign_id, userId: context.userId, inputUnits: 1, unitType: "object" }, () => deletePreviewAsset(request.reference_object_key!)).catch(() => undefined);
     revalidatePath("/brand/create"); revalidatePath("/creator/brand-requests");
     redirect("/creator/brand-requests?saved=1");
   }
@@ -36,7 +36,7 @@ export async function respondToBrandPreviewAction(formData: FormData) {
   if (!(file instanceof File)) redirect("/creator/brand-requests?error=photo");
   let asset: { key: string; sha256: string } | undefined;
   try {
-    asset = await trackInfrastructureOperation({ provider: "r2", operation: "upload_creator_preview_reference", companyId: request.company_id, campaignId: request.campaign_id, userId: context.userId, inputUnits: file.size, unitType: "byte" }, async () => {
+    asset = await trackInfrastructureOperation({ provider: "supabase", operation: "upload_creator_preview_reference", companyId: request.company_id, campaignId: request.campaign_id, userId: context.userId, inputUnits: file.size, unitType: "byte" }, async () => {
       asset = await uploadCreatorPreviewReference(context.account.creator_id, file);
       return asset;
     });
@@ -46,7 +46,7 @@ export async function respondToBrandPreviewAction(formData: FormData) {
       consent_version: "creator-campaign-image-preview-v1", updated_at: new Date().toISOString() }).eq("id", request.id).eq("status", "awaiting_consent").eq("request_hash", request.request_hash).eq("creator_id", context.account.creator_id).select("id").maybeSingle();
     if (error || !data) throw new Error("consent_save_failed");
   } catch {
-    if (asset) await trackInfrastructureOperation({ provider: "r2", operation: "cleanup_creator_preview_reference", companyId: request.company_id, campaignId: request.campaign_id, userId: context.userId, inputUnits: 1, unitType: "object" }, () => deletePreviewAsset(asset!.key)).catch(() => undefined);
+    if (asset) await trackInfrastructureOperation({ provider: "supabase", operation: "cleanup_creator_preview_reference", companyId: request.company_id, campaignId: request.campaign_id, userId: context.userId, inputUnits: 1, unitType: "object" }, () => deletePreviewAsset(asset!.key)).catch(() => undefined);
     redirect("/creator/brand-requests?error=photo");
   }
   revalidatePath("/brand/create"); revalidatePath("/creator/brand-requests");

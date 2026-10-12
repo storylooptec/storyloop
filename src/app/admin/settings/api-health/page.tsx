@@ -1,3 +1,4 @@
+import { storageConfigured } from "@/lib/storage/config";
 import Link from "next/link";
 import { permissions, roleHasPermission } from "@/auth/permissions";
 import { requirePermission } from "@/auth/require-permission";
@@ -10,6 +11,18 @@ import { ProviderBilling } from "./billing";
 type Props = { searchParams: Promise<{ from?: string; to?: string; provider?: string; status?: string; company?: string; saved?: string; error?: string; bill?: string }> };
 const providers = ["serpapi", "openai", "higgsfield", "r2", "supabase"] as const;
 const statuses = ["started", "success", "failed", "rate_limited", "cached", "unknown"] as const;
+const operatingRules = {
+  serpapi: "3 competitor scans/company/UTC day; at most 7 discovery searches/scan. Tenant cache: 24 hours. Up to 2 network/5xx retries within 15 seconds total; stop on 429.",
+  openai: "One active request/campaign. Timeouts: competitor extraction 30 seconds, brief 45 seconds, scripts 40 seconds. No automatic paid retry. Structured output and source validation required.",
+  higgsfield: "Daily cap counts paid submissions. One active job/campaign. Quotes expire after 10 minutes; refresh status at most once every 10 seconds. 20-second API timeout; uncertain submissions reuse the original request only.",
+  r2: "Paused. Historical usage and invoices remain available; new files use Supabase Storage.",
+  supabase: "Private Storage: logos/photos 5 MB, generated images 15 MB, videos 50 MB (project limits may be lower). Tenant and consent checks run before storage access. Tenant data access enforced by RLS and checked RPCs. Provider telemetry is server-write-only. Budgets reserve cost before external calls; unknown or missing cost blocks work when a spend cap is set.",
+} as const;
+function environmentEnabled(provider: typeof providers[number]) {
+  return provider === "serpapi" ? process.env.SERP_API_ENABLED === "true"
+    : provider === "higgsfield" ? process.env.HIGGSFIELD_API_ENABLED === "true"
+    : provider === "openai" ? process.env.OPENAI_API_ENABLED !== "false" : provider !== "r2";
+}
 function money(value: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 6 }).format(value); }
 function percentile(values: number[], ratio: number) {
   if (!values.length) return null;
@@ -23,8 +36,8 @@ function configuredProviders() {
   return {
     serpapi: Boolean(process.env.SERP_API_KEY), openai: Boolean(process.env.OPENAI_API_KEY),
     higgsfield: Boolean((combinedHiggsfieldKey && /^[^:\s]+:[^:\s]+$/.test(combinedHiggsfieldKey)) || (higgsfieldId && higgsfieldSecret && !/[\s:]/.test(higgsfieldId + higgsfieldSecret))),
-    r2: Boolean(process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME && (process.env.R2_ENDPOINT || process.env.R2_ACCOUNT_ID)),
-    supabase: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_PUBLISHABLE_KEY),
+    r2: false,
+    supabase: Boolean(process.env.SUPABASE_PUBLISHABLE_KEY && storageConfigured()),
   };
 }
 
@@ -73,8 +86,9 @@ export default async function ApiHealthPage({ searchParams }: Props) {
       const latest = rows.find((event) => event.provider_key === key && !event.cache_hit
         && !(event.status === "rate_limited" && event.latency_ms === null));
       const policy = policies?.find((item) => item.provider_key === key);
-      return <article className="integration-row" key={key}><div><strong>{key}</strong><code>Credentials: {configured[key] ? "configured" : "missing"}</code><small>{key === "serpapi" && process.env.SERP_API_ENABLED !== "true" ? "Search disabled in environment" : policy ? (policy.enabled ? "Enabled" : "Paused") : "No request policy"}</small></div><div><strong>{latest ? `Last result: ${latest.status}` : "No requests in filtered period"}</strong><small>{latest ? new Date(latest.created_at).toLocaleString("en-IN", { timeZone: "UTC" }) + " UTC" : "Health unverified"}</small>{policy ? <small>{policy.daily_company_limit}/company/day · {policy.hourly_campaign_limit}/campaign/hour · Budget {policy.daily_budget_usd === null ? "not configured" : money(Number(policy.daily_budget_usd)) + "/company/day"}<br />{policy.consecutive_failures} consecutive failures{policy.blocked_until ? " · pause deadline " + new Date(policy.blocked_until).toLocaleString("en-IN", { timeZone: "UTC" }) + " UTC" : ""}</small> : null}</div></article>;
+      return <article className="integration-row" key={key}><div><strong>{key}</strong><code>{key === "r2" ? "Paused — files use Supabase" : `Credentials: ${configured[key] ? "configured" : "missing"}`}</code><small>{!environmentEnabled(key) ? "Disabled in environment" : policy ? (policy.enabled ? "Database policy enabled" : "Paused by database policy") : "Infrastructure integration"}</small></div><div><strong>{latest ? `Last result: ${latest.status}` : "No requests in filtered period"}</strong><small>{latest ? new Date(latest.created_at).toLocaleString("en-IN", { timeZone: "UTC" }) + " UTC" : "Health unverified"}</small>{policy ? <small>{policy.daily_company_limit}/company/day · {policy.hourly_campaign_limit}/campaign/hour · Budget {policy.daily_budget_usd === null ? "not configured" : money(Number(policy.daily_budget_usd)) + "/company/day"}<br />{policy.consecutive_failures} consecutive failures{policy.blocked_until ? " · pause deadline " + new Date(policy.blocked_until).toLocaleString("en-IN", { timeZone: "UTC" }) + " UTC" : ""}</small> : null}</div></article>;
     })}</section>
+    <section className="settings-section"><h2>API operating rules</h2><p className="page-copy">These are Storyloop limits. Vendor account quotas are separate and must be checked in each provider dashboard. Five consecutive errors pause a provider for five minutes; a provider rate-limit response sets its cooldown. Daily limits reset at midnight UTC (05:30 IST).</p><div className="audit-table-wrap"><table className="audit-table"><thead><tr><th>Provider</th><th>Timeouts, retries, caching and access</th></tr></thead><tbody>{providers.map(key => <tr key={key}><td>{key}</td><td>{operatingRules[key]}</td></tr>)}</tbody></table></div><p className="page-copy">SerpApi and OpenAI prices come from server configuration; unavailable estimates remain unreported. Higgsfield uses a current quote and requires explicit cost acceptance. Infrastructure invoices are reconciled separately. Credentials and feature flags do not prove live provider health.</p><p className="page-copy">Supabase credential readiness includes the server-only secret/service-role key required for trusted writes. No credential values appear here.</p></section>
     <section className="settings-section"><h2>Request history</h2><p className="page-copy">Reconcile only a provider-verified request amount. Do not assign a whole subscription invoice to each call. Subscription allocations remain estimates.</p><div className="audit-table-wrap"><table className="audit-table"><thead><tr><th>When (UTC)</th><th>Provider / operation</th><th>Result</th><th>Usage / request ID</th><th>Latency / retries</th><th>Estimated / billed</th><th>Company / campaign</th><th>Reconciliation</th></tr></thead><tbody>{rows.map((event) => <tr key={event.id}>
       <td>{new Date(event.created_at).toLocaleString("en-IN", { timeZone: "UTC" })}<small>{event.completed_at ? "Finished " + new Date(event.completed_at).toLocaleTimeString("en-IN", { timeZone: "UTC" }) : ""}</small></td>
       <td>{event.provider_key}<small>{event.operation}{event.model ? " · " + event.model : ""}</small></td><td>{event.status}{event.cache_hit ? " · cache" : ""}<small>{event.failure_code}</small></td>

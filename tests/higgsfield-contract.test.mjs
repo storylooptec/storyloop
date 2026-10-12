@@ -8,6 +8,7 @@ import ts from "typescript";
 const path = new URL("../src/lib/providers/higgsfield.ts", import.meta.url);
 const creativeUrl = new URL("../src/brand/creative.ts", import.meta.url).href;
 const source = (await readFile(path, "utf8")).replace('import "server-only";', "")
+  .replace('import { storageConfigured } from "@/lib/storage/config";', 'const storageConfigured = () => Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY));')
   .replace('from "@/brand/creative"', `from ${JSON.stringify(creativeUrl)}`)
   .replace('import { ProviderError } from "@/lib/providers/runtime";', 'class ProviderError extends Error { constructor(public code: string) { super(code); } }');
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;

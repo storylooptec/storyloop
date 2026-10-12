@@ -5,7 +5,7 @@ import { trackInfrastructureOperation } from "@/lib/providers/infrastructure";
 
 import { requireBrandContext } from "@/brand/context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { deleteBrandAsset, uploadBrandAsset } from "@/lib/r2/brand-assets";
+import { deleteBrandAsset, uploadBrandAsset } from "@/lib/storage/brand-assets";
 
 const allowedDeliverables = new Set([
   "instagram_reel",
@@ -61,7 +61,7 @@ export async function createCampaignDraftAction(_state: {error:string}|null,form
   if (logoFile instanceof File && logoFile.size > 0) {
     try {
       if (!["image/png","image/jpeg","image/webp"].includes(logoFile.type)) return {error:"Use a PNG, JPG or WebP logo."};
-      const uploaded=await trackInfrastructureOperation({provider:"r2",operation:"upload_brand_logo",companyId:context.companyId,userId:context.userId,inputUnits:logoFile.size,unitType:"byte"},()=>uploadBrandAsset({companyId:context.companyId,slot:"primary_logo",file:logoFile}));
+      const uploaded=await trackInfrastructureOperation({provider:"supabase",operation:"upload_brand_logo",companyId:context.companyId,userId:context.userId,inputUnits:logoFile.size,unitType:"byte"},()=>uploadBrandAsset({companyId:context.companyId,slot:"primary_logo",file:logoFile}));
       logoKey=uploaded.objectKey;
     } catch { return {error:"The logo could not be uploaded. Check its format and 5 MB size limit, then retry."}; }
   }
@@ -92,7 +92,7 @@ export async function createCampaignDraftAction(_state: {error:string}|null,form
     });
     createdId=data.id;
   } catch {
-    if(logoKey){try{await trackInfrastructureOperation({provider:"r2",operation:"cleanup_brand_logo",companyId:context.companyId,userId:context.userId},()=>deleteBrandAsset(logoKey!));}catch{/* The failed operation remains recorded for cleanup. */}}
+    if(logoKey){try{await trackInfrastructureOperation({provider:"supabase",operation:"cleanup_brand_logo",companyId:context.companyId,userId:context.userId},()=>deleteBrandAsset(logoKey!));}catch{/* The failed operation remains recorded for cleanup. */}}
     return {error:"The campaign draft could not be saved. Try again."};
   }
 

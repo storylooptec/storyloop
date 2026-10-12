@@ -2,15 +2,8 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { getR2Client } from "@/lib/r2/client";
-
-export function previewBucket(): string {
-  const bucket = process.env.R2_PRIVATE_BUCKET_NAME?.trim();
-  if (!bucket || bucket === process.env.R2_BUCKET_NAME && Boolean(process.env.R2_PUBLIC_BASE_URL)) throw new Error("private_storage_not_configured");
-  return bucket;
-}
+import { PRIVATE_MEDIA_BUCKET, MAX_PREVIEW_VIDEO_BYTES } from "@/lib/storage/config";
+import { uploadStorageObject, deleteStorageObject, signedStorageUrl } from "@/lib/storage/objects";
 
 function imageSignature(type: string, bytes: Uint8Array): boolean {
   if (type === "image/jpeg") return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
@@ -24,19 +17,18 @@ export async function uploadCreatorPreviewReference(creatorId: string, file: Fil
   const body = Buffer.from(await file.arrayBuffer());
   if (!imageSignature(file.type, body)) throw new Error("reference_invalid");
   const key = `private/creator-previews/${creatorId}/${randomUUID()}`;
-  await getR2Client().send(new PutObjectCommand({ Bucket: previewBucket(), Key: key, Body: body,
-    ContentType: file.type, CacheControl: "private, no-store" }));
+  await uploadStorageObject(PRIVATE_MEDIA_BUCKET, key, body, file.type);
   return { key, sha256: createHash("sha256").update(body).digest("hex") };
 }
 
 export async function signedReferenceUrl(key: string) {
   if (!key.startsWith("private/creator-previews/")) throw new Error("reference_invalid");
-  return getSignedUrl(getR2Client(), new GetObjectCommand({ Bucket: previewBucket(), Key: key }), { expiresIn: 3600 });
+  return signedStorageUrl(PRIVATE_MEDIA_BUCKET, key, 3600);
 }
 
 export async function deletePreviewAsset(key: string) {
   if (!key.startsWith("private/")) throw new Error("asset_invalid");
-  await getR2Client().send(new DeleteObjectCommand({ Bucket: previewBucket(), Key: key }));
+  await deleteStorageObject(PRIVATE_MEDIA_BUCKET, key);
 }
 
 function publicAddress(address: string): boolean {
@@ -57,7 +49,7 @@ export async function archivePreviewOutput(input: { jobId: string; companyId: st
   const response = await fetch(url, { redirect: "error", cache: "no-store", signal: AbortSignal.timeout(45000) });
   if (!response.ok || !response.body) throw new Error("media_download_failed");
   const type = response.headers.get("content-type")?.split(";")[0].trim() ?? "";
-  const max = input.kind === "video" ? 64 * 1024 * 1024 : 15 * 1024 * 1024;
+  const max = input.kind === "video" ? MAX_PREVIEW_VIDEO_BYTES : 15 * 1024 * 1024;
   if (!(input.kind === "video" ? ["video/mp4", "video/webm"] : ["image/png", "image/jpeg", "image/webp"]).includes(type)) throw new Error("media_type_invalid");
   if (Number(response.headers.get("content-length")) > max) throw new Error("media_too_large");
   const reader = response.body.getReader();
@@ -77,7 +69,7 @@ export async function archivePreviewOutput(input: { jobId: string; companyId: st
     || (type === "video/mp4" && bytes.subarray(4,8).toString() !== "ftyp")
     || (type === "video/webm" && bytes.subarray(0,4).toString("hex") !== "1a45dfa3")) throw new Error("media_signature_invalid");
   const key = `private/brand-previews/${input.companyId}/${input.jobId}`;
-  await getR2Client().send(new PutObjectCommand({ Bucket: previewBucket(), Key: key,
-    Body: bytes, ContentType: type, CacheControl: "private, no-store" }));
+  // The same completed provider job may be polled again after a metadata-write failure.
+  await uploadStorageObject(PRIVATE_MEDIA_BUCKET, key, bytes, type, true);
   return { key, contentType: type };
 }
