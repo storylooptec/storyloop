@@ -113,7 +113,7 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
                 <div style={{ minWidth: 0 }}>
                   <span className={styles.statusPill}>Search result {index + 1}</span>
                   <h3 style={{ margin: "10px 0 4px", fontSize: 16 }}>{item.source_title}</h3>
-                  <p className={styles.muted}>{Source domain: {item.source_domain}}</p>
+                  <p className={styles.muted}>Source domain: {item.source_domain}</p>
                   <p className={styles.muted}>{item.source_snippet || "Open the source to review the result."}</p>
                   <small className={styles.muted}>Observed {new Date(item.observed_at).toLocaleString("en-IN")}{item.published_at ? " · Source date " + new Date(item.published_at).toLocaleDateString("en-IN") : ""}</small>
                 </div>
@@ -124,7 +124,7 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
         ) : (
           <div className={styles.emptyState}>
             {scanCompleted
-              ? "The search did not return reviewable candidates. Adjust the brand or product details and scan again."
+              ? "The search did not return reviewable source results. Adjust the brand or product details and scan again."
               : "Run a scan to collect the first dated baseline. After a later scan, Storyloop can compare new observations with this baseline."}
           </div>
         )}
