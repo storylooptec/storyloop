@@ -14,6 +14,132 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_provider_policies: {
+        Row: { provider_key: string; enabled: boolean; daily_company_limit: number; hourly_campaign_limit: number; daily_budget_usd: number | null; consecutive_failures: number; blocked_until: string | null; updated_at: string }
+        Insert: { provider_key: string; enabled?: boolean; daily_company_limit: number; hourly_campaign_limit: number; daily_budget_usd?: number | null; consecutive_failures?: number; blocked_until?: string | null; updated_at?: string }
+        Update: { provider_key?: string; enabled?: boolean; daily_company_limit?: number; hourly_campaign_limit?: number; daily_budget_usd?: number | null; consecutive_failures?: number; blocked_until?: string | null; updated_at?: string }
+        Relationships: []
+      }
+      api_rate_limit_hour_windows: {
+        Row: { campaign_id: string; company_id: string; provider_key: string; window_start: string; calls_used: number; updated_at: string }
+        Insert: { campaign_id: string; company_id: string; provider_key: string; window_start: string; calls_used?: number; updated_at?: string }
+        Update: { campaign_id?: string; company_id?: string; provider_key?: string; window_start?: string; calls_used?: number; updated_at?: string }
+        Relationships: []
+      }
+      api_rate_limit_windows: {
+        Row: { company_id: string; provider_key: string; window_start: string; calls_used: number; updated_at: string }
+        Insert: { company_id: string; provider_key: string; window_start: string; calls_used?: number; updated_at?: string }
+        Update: { company_id?: string; provider_key?: string; window_start?: string; calls_used?: number; updated_at?: string }
+        Relationships: []
+      }
+      brand_campaign_creatives: {
+        Row: { id: string; campaign_id: string; company_id: string; content: Json; generated_model: string | null; approval_state: string; created_at: string; updated_at: string; revision: number; plan_revision: number | null; plan_updated_at: string | null; approved_at: string | null; approved_by: string | null }
+        Insert: { id?: string; campaign_id: string; company_id: string; content?: Json; generated_model?: string | null; approval_state?: string; created_at?: string; updated_at?: string; revision?: number; plan_revision?: number | null; plan_updated_at?: string | null; approved_at?: string | null; approved_by?: string | null }
+        Update: { id?: string; campaign_id?: string; company_id?: string; content?: Json; generated_model?: string | null; approval_state?: string; created_at?: string; updated_at?: string; revision?: number; plan_revision?: number | null; plan_updated_at?: string | null; approved_at?: string | null; approved_by?: string | null }
+        Relationships: []
+      }
+      brand_campaign_creator_selections: {
+        Row: { id: string; company_id: string; campaign_id: string; catalog_id: string; rate_id: string; creator_name_snapshot: string; deliverable_type: string; quantity: number; unit_rate_cents: number; currency: string; selected_by: string; created_at: string; updated_at: string }
+        Insert: { id?: string; company_id: string; campaign_id: string; catalog_id: string; rate_id: string; creator_name_snapshot: string; deliverable_type: string; quantity: number; unit_rate_cents: number; currency?: string; selected_by: string; created_at?: string; updated_at?: string }
+        Update: { id?: string; company_id?: string; campaign_id?: string; catalog_id?: string; rate_id?: string; creator_name_snapshot?: string; deliverable_type?: string; quantity?: number; unit_rate_cents?: number; currency?: string; selected_by?: string; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      brand_campaign_metrics: {
+        Row: { id: string; company_id: string; campaign_id: string; metric_date: string; platform: string; external_post_id: string; source_type: string; source_reference: string; views: number | null; impressions: number | null; engagements: number | null; clicks: number | null; conversions: number | null; spend_cents: number | null; revenue_cents: number | null; currency: string; recorded_by: string; created_at: string; updated_at: string }
+        Insert: { id?: string; company_id: string; campaign_id: string; metric_date: string; platform: string; external_post_id: string; source_type: string; source_reference: string; views?: number | null; impressions?: number | null; engagements?: number | null; clicks?: number | null; conversions?: number | null; spend_cents?: number | null; revenue_cents?: number | null; currency?: string; recorded_by: string; created_at?: string; updated_at?: string }
+        Update: { id?: string; company_id?: string; campaign_id?: string; metric_date?: string; platform?: string; external_post_id?: string; source_type?: string; source_reference?: string; views?: number | null; impressions?: number | null; engagements?: number | null; clicks?: number | null; conversions?: number | null; spend_cents?: number | null; revenue_cents?: number | null; currency?: string; recorded_by?: string; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      brand_campaign_plans: {
+        Row: { id: string; campaign_id: string; company_id: string; brief: Json; approval_state: string; generated_model: string | null; generated_at: string | null; approved_at: string | null; created_at: string; updated_at: string; revision: number }
+        Insert: { id?: string; campaign_id: string; company_id: string; brief?: Json; approval_state?: string; generated_model?: string | null; generated_at?: string | null; approved_at?: string | null; created_at?: string; updated_at?: string; revision?: number }
+        Update: { id?: string; campaign_id?: string; company_id?: string; brief?: Json; approval_state?: string; generated_model?: string | null; generated_at?: string | null; approved_at?: string | null; created_at?: string; updated_at?: string; revision?: number }
+        Relationships: []
+      }
+      brand_campaigns: {
+        Row: { id: string; company_id: string; created_by: string; title: string; brand_name: string; website_url: string | null; logo_key: string | null; promoted_item: string; objective: string; deliverables: string[]; status: string; created_at: string; updated_at: string; requested_budget_cents: number | null; actual_live_at: string | null; completed_at: string | null }
+        Insert: { id?: string; company_id: string; created_by: string; title: string; brand_name: string; website_url?: string | null; logo_key?: string | null; promoted_item: string; objective: string; deliverables?: string[]; status?: string; created_at?: string; updated_at?: string; requested_budget_cents?: number | null; actual_live_at?: string | null; completed_at?: string | null }
+        Update: { id?: string; company_id?: string; created_by?: string; title?: string; brand_name?: string; website_url?: string | null; logo_key?: string | null; promoted_item?: string; objective?: string; deliverables?: string[]; status?: string; created_at?: string; updated_at?: string; requested_budget_cents?: number | null; actual_live_at?: string | null; completed_at?: string | null }
+        Relationships: []
+      }
+      brand_competitor_observations: {
+        Row: { id: string; company_id: string; scan_id: string; competitor_name: string; competitor_domain: string | null; source_url: string; source_domain: string; source_title: string; source_snippet: string; published_at: string | null; observed_at: string; content_hash: string; created_at: string; competitor_id: string | null; evidence_kind: string; source_record_key: string; source_date_text: string | null; provider_search_id: string | null; attributes: Json }
+        Insert: { id?: string; company_id: string; scan_id: string; competitor_name: string; competitor_domain?: string | null; source_url: string; source_domain: string; source_title: string; source_snippet: string; published_at?: string | null; observed_at?: string; content_hash: string; created_at?: string; competitor_id?: string | null; evidence_kind?: string; source_record_key: string; source_date_text?: string | null; provider_search_id?: string | null; attributes?: Json }
+        Update: { id?: string; company_id?: string; scan_id?: string; competitor_name?: string; competitor_domain?: string | null; source_url?: string; source_domain?: string; source_title?: string; source_snippet?: string; published_at?: string | null; observed_at?: string; content_hash?: string; created_at?: string; competitor_id?: string | null; evidence_kind?: string; source_record_key?: string; source_date_text?: string | null; provider_search_id?: string | null; attributes?: Json }
+        Relationships: []
+      }
+      brand_competitor_products: {
+        Row: { id: string; company_id: string; campaign_id: string; competitor_id: string; scan_id: string; asin: string; amazon_domain: string; title: string; source_url: string; rating: number | null; review_count: number | null; price: number | null; price_text: string | null; currency: string | null; status: string; observed_at: string; provider_search_id: string | null }
+        Insert: { id?: string; company_id: string; campaign_id: string; competitor_id: string; scan_id: string; asin: string; amazon_domain?: string; title: string; source_url: string; rating?: number | null; review_count?: number | null; price?: number | null; price_text?: string | null; currency?: string | null; status?: string; observed_at: string; provider_search_id?: string | null }
+        Update: { id?: string; company_id?: string; campaign_id?: string; competitor_id?: string; scan_id?: string; asin?: string; amazon_domain?: string; title?: string; source_url?: string; rating?: number | null; review_count?: number | null; price?: number | null; price_text?: string | null; currency?: string | null; status?: string; observed_at?: string; provider_search_id?: string | null }
+        Relationships: []
+      }
+      brand_competitor_scans: {
+        Row: { id: string; company_id: string; campaign_id: string; provider_key: string; query_hash: string; market: string; status: string; result_count: number; error_code: string | null; started_at: string | null; completed_at: string | null; created_by: string; created_at: string }
+        Insert: { id?: string; company_id: string; campaign_id: string; provider_key?: string; query_hash: string; market?: string; status?: string; result_count?: number; error_code?: string | null; started_at?: string | null; completed_at?: string | null; created_by: string; created_at?: string }
+        Update: { id?: string; company_id?: string; campaign_id?: string; provider_key?: string; query_hash?: string; market?: string; status?: string; result_count?: number; error_code?: string | null; started_at?: string | null; completed_at?: string | null; created_by?: string; created_at?: string }
+        Relationships: []
+      }
+      brand_competitors: {
+        Row: { id: string; company_id: string; campaign_id: string; scan_id: string; name: string; official_domain: string; rationale: string; status: string; evidence_ids: string[]; verified_at: string; confirmed_at: string | null; enrichment_status: string; enrichment_started_at: string | null; enriched_at: string | null; error_code: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; company_id: string; campaign_id: string; scan_id: string; name: string; official_domain: string; rationale: string; status?: string; evidence_ids?: string[]; verified_at: string; confirmed_at?: string | null; enrichment_status?: string; enrichment_started_at?: string | null; enriched_at?: string | null; error_code?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; company_id?: string; campaign_id?: string; scan_id?: string; name?: string; official_domain?: string; rationale?: string; status?: string; evidence_ids?: string[]; verified_at?: string; confirmed_at?: string | null; enrichment_status?: string; enrichment_started_at?: string | null; enriched_at?: string | null; error_code?: string | null; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      brand_creator_catalog: {
+        Row: { id: string; creator_id: string; display_name: string; bio: string; city: string | null; categories: string[]; languages: string[]; profile_url: string | null; active: boolean; directory_consented_at: string | null; published_at: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; creator_id: string; display_name: string; bio?: string; city?: string | null; categories?: string[]; languages?: string[]; profile_url?: string | null; active?: boolean; directory_consented_at?: string | null; published_at?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; creator_id?: string; display_name?: string; bio?: string; city?: string | null; categories?: string[]; languages?: string[]; profile_url?: string | null; active?: boolean; directory_consented_at?: string | null; published_at?: string | null; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      brand_creator_rates: {
+        Row: { id: string; catalog_id: string; deliverable_type: string; unit_rate_cents: number; currency: string; active: boolean; updated_at: string }
+        Insert: { id?: string; catalog_id: string; deliverable_type: string; unit_rate_cents: number; currency?: string; active?: boolean; updated_at?: string }
+        Update: { id?: string; catalog_id?: string; deliverable_type?: string; unit_rate_cents?: number; currency?: string; active?: boolean; updated_at?: string }
+        Relationships: []
+      }
+      brand_memberships: {
+        Row: { company_id: string; user_id: string; role: string; status: string; created_at: string; updated_at: string }
+        Insert: { company_id: string; user_id: string; role?: string; status?: string; created_at?: string; updated_at?: string }
+        Update: { company_id?: string; user_id?: string; role?: string; status?: string; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      brand_preview_job_private: {
+        Row: { job_id: string; idempotency_key: string; request_payload: Json; status_url: string | null; output_url: string | null }
+        Insert: { job_id: string; idempotency_key?: string; request_payload: Json; status_url?: string | null; output_url?: string | null }
+        Update: { job_id?: string; idempotency_key?: string; request_payload?: Json; status_url?: string | null; output_url?: string | null }
+        Relationships: []
+      }
+      brand_preview_jobs: {
+        Row: { id: string; request_id: string; company_id: string; campaign_id: string; model: string; kind: string; status: string; estimated_cost_usd: number; estimated_credits: number; quote_expires_at: string; provider_request_id: string | null; failure_code: string | null; media_object_key: string | null; media_content_type: string | null; last_polled_at: string | null; submitted_at: string | null; completed_at: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; request_id: string; company_id: string; campaign_id: string; model: string; kind: string; status: string; estimated_cost_usd: number; estimated_credits: number; quote_expires_at: string; provider_request_id?: string | null; failure_code?: string | null; media_object_key?: string | null; media_content_type?: string | null; last_polled_at?: string | null; submitted_at?: string | null; completed_at?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; request_id?: string; company_id?: string; campaign_id?: string; model?: string; kind?: string; status?: string; estimated_cost_usd?: number; estimated_credits?: number; quote_expires_at?: string; provider_request_id?: string | null; failure_code?: string | null; media_object_key?: string | null; media_content_type?: string | null; last_polled_at?: string | null; submitted_at?: string | null; completed_at?: string | null; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      brand_preview_requests: {
+        Row: { id: string; company_id: string; campaign_id: string; creative_id: string; creative_revision: number; creator_id: string | null; kind: string; campaign_title: string; brand_name: string; prompt: string; request_hash: string; status: string; reference_object_key: string | null; reference_sha256: string | null; consented_at: string | null; consented_by: string | null; consent_version: string | null; expires_at: string; created_by: string; created_at: string; updated_at: string }
+        Insert: { id?: string; company_id: string; campaign_id: string; creative_id: string; creative_revision: number; creator_id?: string | null; kind: string; campaign_title: string; brand_name: string; prompt: string; request_hash: string; status: string; reference_object_key?: string | null; reference_sha256?: string | null; consented_at?: string | null; consented_by?: string | null; consent_version?: string | null; expires_at: string; created_by: string; created_at?: string; updated_at?: string }
+        Update: { id?: string; company_id?: string; campaign_id?: string; creative_id?: string; creative_revision?: number; creator_id?: string | null; kind?: string; campaign_title?: string; brand_name?: string; prompt?: string; request_hash?: string; status?: string; reference_object_key?: string | null; reference_sha256?: string | null; consented_at?: string | null; consented_by?: string | null; consent_version?: string | null; expires_at?: string; created_by?: string; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      brand_search_cache: {
+        Row: { company_id: string; cache_key: string; engine: string; payload: Json; provider_search_id: string | null; fetched_at: string; expires_at: string }
+        Insert: { company_id: string; cache_key: string; engine: string; payload: Json; provider_search_id?: string | null; fetched_at?: string; expires_at: string }
+        Update: { company_id?: string; cache_key?: string; engine?: string; payload?: Json; provider_search_id?: string | null; fetched_at?: string; expires_at?: string }
+        Relationships: []
+      }
+      external_api_bills: {
+        Row: { id: string; provider_key: string; invoice_reference: string; amount_usd: number; currency: string; billed_at: string; period_start: string; period_end: string; recorded_by: string; created_at: string; updated_at: string }
+        Insert: { id?: string; provider_key: string; invoice_reference: string; amount_usd: number; currency?: string; billed_at: string; period_start: string; period_end: string; recorded_by: string; created_at?: string; updated_at?: string }
+        Update: { id?: string; provider_key?: string; invoice_reference?: string; amount_usd?: number; currency?: string; billed_at?: string; period_start?: string; period_end?: string; recorded_by?: string; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      external_api_usage_events: {
+        Row: { id: string; company_id: string | null; campaign_id: string | null; actor_user_id: string | null; provider_key: string; operation: string; model: string | null; status: string; latency_ms: number | null; retry_count: number; cache_hit: boolean; input_units: number | null; output_units: number | null; unit_type: string | null; estimated_cost_usd: number | null; billed_cost_usd: number | null; billed_cost_verified: boolean; failure_code: string | null; created_at: string; provider_request_id: string | null; billing_reference: string | null; reconciled_at: string | null; idempotency_key: string | null; completed_at: string | null; reserved_cost_usd: number | null }
+        Insert: { id?: string; company_id?: string | null; campaign_id?: string | null; actor_user_id?: string | null; provider_key: string; operation: string; model?: string | null; status: string; latency_ms?: number | null; retry_count?: number; cache_hit?: boolean; input_units?: number | null; output_units?: number | null; unit_type?: string | null; estimated_cost_usd?: number | null; billed_cost_usd?: number | null; billed_cost_verified?: boolean; failure_code?: string | null; created_at?: string; provider_request_id?: string | null; billing_reference?: string | null; reconciled_at?: string | null; idempotency_key?: string | null; completed_at?: string | null; reserved_cost_usd?: number | null }
+        Update: { id?: string; company_id?: string | null; campaign_id?: string | null; actor_user_id?: string | null; provider_key?: string; operation?: string; model?: string | null; status?: string; latency_ms?: number | null; retry_count?: number; cache_hit?: boolean; input_units?: number | null; output_units?: number | null; unit_type?: string | null; estimated_cost_usd?: number | null; billed_cost_usd?: number | null; billed_cost_verified?: boolean; failure_code?: string | null; created_at?: string; provider_request_id?: string | null; billing_reference?: string | null; reconciled_at?: string | null; idempotency_key?: string | null; completed_at?: string | null; reserved_cost_usd?: number | null }
+        Relationships: []
+      }
       admin_user_preferences: {
         Row: {
           admin_onboarding_completed: boolean
@@ -698,9 +824,23 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      storyloop_public_brand_assets: {
+        Row: { dark_logo_key: string | null; light_logo_key: string | null; primary_logo_key: string | null }
+        Relationships: []
+      }
     }
     Functions: {
+      begin_provider_operation: { Args: { target_company_id: string; target_campaign_id: string; actor_id: string; provider: string; operation_name: string; model_name: string | null; dedupe_key: string; reserved_cost: number | null }; Returns: Json }
+      finish_provider_operation: { Args: { event_id: string; outcome: Json }; Returns: undefined }
+      save_brand_campaign_brief: { Args: { target_campaign_id: string; expected_revision: number; updated_brief: Json; approve?: boolean; source_model?: string | null }; Returns: number }
+      set_brand_creator_selection: { Args: { target_campaign_id: string; target_rate_id: string; target_quantity: number; expected_rate_cents?: number | null }; Returns: string }
+      get_brand_campaign_benchmarks: { Args: { target_campaign_id: string }; Returns: { deliverable_type: string; campaign_count: number; median_unit_rate_cents: number; p25_unit_rate_cents: number; p75_unit_rate_cents: number }[] }
+      transition_brand_campaign: { Args: { target_campaign_id: string; target_status: string; event_at: string }; Returns: undefined }
+      save_brand_creative: { Args: { p_creative_id: string; p_revision: number; p_content: Json }; Returns: undefined }
+      approve_brand_creative: { Args: { p_creative_id: string; p_revision: number }; Returns: undefined }
+      create_brand_workspace: { Args: { workspace_name: string }; Returns: string }
+      consume_serpapi_scan_quota: { Args: { target_company_id: string }; Returns: boolean }
+      consume_openai_brief_quota: { Args: { target_campaign_id: string; target_company_id: string }; Returns: boolean }
       complete_creator_onboarding: { Args: never; Returns: string }
       ensure_creator_account: {
         Args: { p_phone?: string; p_source?: string }
