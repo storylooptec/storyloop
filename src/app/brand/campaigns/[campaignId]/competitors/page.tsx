@@ -16,7 +16,7 @@ type Props = {
 function messageFor(error?: string) {
   switch (error) {
     case "limit": return "The workspace scan limit has been reached. Try again after the daily window resets.";
-    case "provider": return "SerpApi is not configured for this environment. No external request was made.";
+    case "provider": return "Search is not enabled in this environment. No external request was made.";
     case "running": return "A competitor scan is already running for this campaign.";
     case "campaign": return "This campaign could not be opened.";
     case "scan": return "The scan failed. Try again later; provider details stay in the admin health log.";
@@ -132,9 +132,15 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
 
       <div className={styles.formActions}>
         <Link href="/brand/home" className={styles.textButton}>Save and exit</Link>
-        <Link href={"/brand/plan?campaign=" + campaign.id} className={styles.primaryButton} aria-disabled={!scanCompleted}>
-          Continue to brief and creator planning →
-        </Link>
+        {scanCompleted ? (
+          <Link href={"/brand/plan?campaign=" + campaign.id} className={styles.primaryButton}>
+            Continue to brief and creator planning →
+          </Link>
+        ) : (
+          <button type="button" className={styles.secondaryButton} disabled>
+            Continue after scan
+          </button>
+        )}
       </div>
     </BrandShell>
   );
