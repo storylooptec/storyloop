@@ -21,9 +21,15 @@ export type Database = {
         Relationships: []
       }
       brand_campaigns: {
-        Row: { brand_name: string; company_id: string; created_at: string; created_by: string; deliverables: string[]; id: string; logo_key: string | null; objective: string; promoted_item: string; status: string; title: string; updated_at: string; website_url: string | null }
-        Insert: { brand_name: string; company_id: string; created_at?: string; created_by: string; deliverables?: string[]; id?: string; logo_key?: string | null; objective: string; promoted_item: string; status?: string; title: string; updated_at?: string; website_url?: string | null }
-        Update: { brand_name?: string; company_id?: string; created_at?: string; created_by?: string; deliverables?: string[]; id?: string; logo_key?: string | null; objective?: string; promoted_item?: string; status?: string; title?: string; updated_at?: string; website_url?: string | null }
+        Row: { brand_name: string; company_id: string; created_at: string; created_by: string; deliverables: string[]; id: string; logo_key: string | null; objective: string; promoted_item: string; requested_budget_cents: number | null; status: string; title: string; updated_at: string; website_url: string | null }
+        Insert: { brand_name: string; company_id: string; created_at?: string; created_by: string; deliverables?: string[]; id?: string; logo_key?: string | null; objective: string; promoted_item: string; requested_budget_cents?: number | null; status?: string; title: string; updated_at?: string; website_url?: string | null }
+        Update: { brand_name?: string; company_id?: string; created_at?: string; created_by?: string; deliverables?: string[]; id?: string; logo_key?: string | null; objective?: string; promoted_item?: string; requested_budget_cents?: number | null; status?: string; title?: string; updated_at?: string; website_url?: string | null }
+        Relationships: []
+      }
+      brand_campaign_plans: {
+        Row: { approval_state: string; approved_at: string | null; brief: Json; campaign_id: string; company_id: string; created_at: string; generated_at: string | null; generated_model: string | null; id: string; updated_at: string }
+        Insert: { approval_state?: string; approved_at?: string | null; brief?: Json; campaign_id: string; company_id: string; created_at?: string; generated_at?: string | null; generated_model?: string | null; id?: string; updated_at?: string }
+        Update: { approval_state?: string; approved_at?: string | null; brief?: Json; campaign_id?: string; company_id?: string; created_at?: string; generated_at?: string | null; generated_model?: string | null; id?: string; updated_at?: string }
         Relationships: []
       }
       brand_competitor_scans: {
@@ -735,6 +741,7 @@ export type Database = {
     }
     Functions: {
       consume_serpapi_scan_quota: { Args: { target_company_id: string }; Returns: boolean }
+      consume_openai_brief_quota: { Args: { target_campaign_id: string; target_company_id: string }; Returns: boolean }
       complete_creator_onboarding: { Args: never; Returns: string }
       ensure_creator_account: {
         Args: { p_phone?: string; p_source?: string }
