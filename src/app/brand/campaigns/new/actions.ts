@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { trackInfrastructureOperation } from "@/lib/providers/infrastructure";
 
 import { requireBrandContext } from "@/brand/context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -29,7 +30,7 @@ function normalizeWebsite(value: string): string | null {
   return parsed.toString();
 }
 
-export async function createCampaignDraftAction(formData: FormData) {
+export async function createCampaignDraftAction(_state: {error:string}|null,formData: FormData):Promise<{error:string}|null> {
   const context = await requireBrandContext();
   const brandName = String(formData.get("brand_name") ?? "").trim().slice(0, 120);
   const websiteRaw = String(formData.get("website_url") ?? "");
@@ -39,34 +40,37 @@ export async function createCampaignDraftAction(formData: FormData) {
   const budgetValue = String(formData.get("budget_inr") ?? "").trim();
   const budgetInr = budgetValue ? Number(budgetValue) : null;
   if (budgetInr !== null && (!Number.isFinite(budgetInr) || budgetInr < 0 || budgetInr > 1000000000)) {
-    throw new Error("Enter a valid budget in INR.");
+    return {error:"Enter a valid budget in INR, up to ₹100 crore."};
   }
   const deliverables = formData
     .getAll("deliverable")
     .map((value) => String(value))
     .filter((value) => allowedDeliverables.has(value));
 
-  if (!brandName || !promotedItem) throw new Error("Brand name and campaign focus are required.");
+  if (!brandName || !promotedItem) return {error:"Brand name and campaign focus are required."};
   if (!["awareness", "consideration", "sales"].includes(objective)) {
-    throw new Error("Choose a campaign objective.");
+    return {error:"Choose a campaign objective."};
   }
-  if (deliverables.length === 0) throw new Error("Select at least one deliverable.");
+  if (deliverables.length === 0) return {error:"Select at least one deliverable."};
 
-  const websiteUrl = normalizeWebsite(websiteRaw);
+  let websiteUrl: string|null;
+  try { websiteUrl=normalizeWebsite(websiteRaw); } catch { return {error:"Enter a valid website address, or leave it blank."}; }
   const logoFile = formData.get("logo");
   let logoKey: string | null = null;
 
   if (logoFile instanceof File && logoFile.size > 0) {
-    const uploaded = await uploadBrandAsset({
-      companyId: context.companyId,
-      slot: "primary_logo",
-      file: logoFile,
-    });
-    logoKey = uploaded.objectKey;
+    try {
+      if (!["image/png","image/jpeg","image/webp"].includes(logoFile.type)) return {error:"Use a PNG, JPG or WebP logo."};
+      const uploaded=await trackInfrastructureOperation({provider:"r2",operation:"upload_brand_logo",companyId:context.companyId,userId:context.userId,inputUnits:logoFile.size,unitType:"byte"},()=>uploadBrandAsset({companyId:context.companyId,slot:"primary_logo",file:logoFile}));
+      logoKey=uploaded.objectKey;
+    } catch { return {error:"The logo could not be uploaded. Check its format and 5 MB size limit, then retry."}; }
   }
 
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
+  let createdId:string;
+  try {
+    const data=await trackInfrastructureOperation({provider:"supabase",operation:"create_brand_campaign",companyId:context.companyId,userId:context.userId},async()=>{
+      const result=await supabase
     .from("brand_campaigns")
     .insert({
       company_id: context.companyId,
@@ -83,13 +87,14 @@ export async function createCampaignDraftAction(formData: FormData) {
     })
     .select("id")
     .single();
-
-  if (error || !data) {
-    if (logoKey) {
-      try { await deleteBrandAsset(logoKey); } catch { /* Retry cleanup operationally. */ }
-    }
-    throw new Error("The campaign draft could not be saved. Try again.");
+      if(result.error||!result.data)throw new Error("campaign_save_failed");
+      return result.data;
+    });
+    createdId=data.id;
+  } catch {
+    if(logoKey){try{await trackInfrastructureOperation({provider:"r2",operation:"cleanup_brand_logo",companyId:context.companyId,userId:context.userId},()=>deleteBrandAsset(logoKey!));}catch{/* The failed operation remains recorded for cleanup. */}}
+    return {error:"The campaign draft could not be saved. Try again."};
   }
 
-  redirect(`/brand/campaigns/${data.id}/competitors`);
+  redirect(`/brand/campaigns/${createdId}/competitors`);
 }

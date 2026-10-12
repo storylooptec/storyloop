@@ -30,6 +30,7 @@ const sections = [
       { label: "Brand & Appearance", href: "/admin/settings/brand" },
       { label: "Integrations", href: "/admin/settings/integrations" },
       { label: "API Health & Spend", href: "/admin/settings/api-health" },
+      { label: "Campaign Metrics", href: "/admin/settings/campaign-metrics" },
       { label: "Configuration", href: "/admin/settings/configuration" },
       { label: "Templates", href: "/admin/settings/templates" },
       { label: "Audit & Logs", href: "/admin/settings/audit" },

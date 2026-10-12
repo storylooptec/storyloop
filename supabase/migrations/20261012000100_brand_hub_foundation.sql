@@ -203,9 +203,9 @@ returns boolean
 language sql
 security definer
 set search_path = pg_catalog, app_private
-as $
+as $$
   select app_private.consume_serpapi_scan_quota(target_company_id);
-$;
+$$;
 
 revoke all on function public.consume_serpapi_scan_quota(uuid) from public, anon;
 grant execute on function public.consume_serpapi_scan_quota(uuid) to authenticated;

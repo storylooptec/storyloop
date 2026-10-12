@@ -37,7 +37,7 @@ export function BrandShell({
         </div>
         <nav className={styles.sideNav} aria-label="Brand workspace">
           {links.map((item) => (
-            <Link key={item.href} href={item.href} data-active={active === item.label ? "true" : undefined}>
+            <Link key={item.href} href={item.href} data-active={active === item.label ? "true" : undefined} aria-current={active === item.label ? "page" : undefined}>
               <span aria-hidden="true">{item.icon}</span>{item.label}
             </Link>
           ))}

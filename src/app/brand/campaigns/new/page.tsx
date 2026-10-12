@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { SubmitButton } from "@/components/brand/submit-button";
 
 import { requireBrandContext } from "@/brand/context";
 import { BrandShell } from "@/components/brand/brand-shell";
 import styles from "../../brand.module.css";
 
-import { createCampaignDraftAction } from "./actions";
+import { CampaignDraftForm } from "@/components/brand/campaign-draft-form";
 
 export default async function NewBrandCampaignPage() {
   const context = await requireBrandContext();
@@ -24,44 +25,44 @@ export default async function NewBrandCampaignPage() {
         <div className={styles.step}><span className={styles.stepIcon}>4</span><strong>Creative</strong></div>
       </nav>
 
-      <form action={createCampaignDraftAction} className={styles.formWrap} encType="multipart/form-data">
+      <CampaignDraftForm>
         <section className={styles.panel}>
           <div className={styles.formGrid}>
             <label className={styles.field}>
-              Brand name <span aria-hidden="true">*</span>
+              <span>Brand name <span aria-hidden="true">*</span></span>
               <input name="brand_name" placeholder="e.g. Aurelia Skincare" maxLength={120} required />
             </label>
             <label className={styles.field}>
-              Website <span className={styles.muted}>(optional)</span>
+              <span>Website <span className={styles.muted}>(optional)</span></span>
               <input name="website_url" type="text" inputMode="url" placeholder="yourbrand.com" />
             </label>
 
             <label className={styles.field + " " + styles.spanAll}>
-              Brand logo <span className={styles.muted}>(optional)</span>
+              <span>Brand logo <span className={styles.muted}>(optional)</span></span>
               <span className={styles.uploadBox}>
                 <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" />
-                <span className={styles.muted}>PNG, JPG or WebP · maximum 5 MB · stored securely in Storyloop’s R2 asset path</span>
+                <span className={styles.muted}>PNG, JPG or WebP · maximum 5 MB · stored securely</span>
               </span>
             </label>
 
             <label className={styles.field + " " + styles.spanAll}>
-              What are you promoting? <span aria-hidden="true">*</span>
+              <span>What are you promoting? <span aria-hidden="true">*</span></span>
               <input name="promoted_item" placeholder="Product, service, or launch" maxLength={240} required />
             </label>
 
             <label className={styles.field + " " + styles.spanAll}>
-              Campaign name <span className={styles.muted}>(optional)</span>
+              <span>Campaign name <span className={styles.muted}>(optional)</span></span>
               <input name="title" placeholder="e.g. Summer launch" maxLength={120} />
             </label>
 
             <label className={styles.field}>
-              Planned campaign budget <span className={styles.muted}>(optional, INR)</span>
-              <input name="budget_inr" type="number" min="0" max="1000000000" step="1000" placeholder="e.g. 250000" />
+              <span>Planned campaign budget <span className={styles.muted}>(optional, INR)</span></span>
+              <input name="budget_inr" type="number" min="0" max="1000000000" step="0.01" placeholder="e.g. 250000" />
               <span className={styles.muted}>Used for the budget check after creator rates and Storyloop history are available.</span>
             </label>
 
             <label className={styles.field}>
-              Campaign objective <span aria-hidden="true">*</span>
+              <span>Campaign objective <span aria-hidden="true">*</span></span>
               <select name="objective" defaultValue="awareness" required>
                 <option value="awareness">Awareness</option>
                 <option value="consideration">Consideration</option>
@@ -81,11 +82,11 @@ export default async function NewBrandCampaignPage() {
             </fieldset>
           </div>
           <div className={styles.formActions}>
-            <Link href="/brand/home" className={styles.textButton}>Save and leave</Link>
-            <button type="submit" className={styles.primaryButton}>Save draft and scan competitors <span aria-hidden="true">→</span></button>
+            <Link href="/brand/home" className={styles.textButton}>Cancel</Link>
+            <SubmitButton className={styles.primaryButton}>Save and continue to competitors <span aria-hidden="true">→</span></SubmitButton>
           </div>
         </section>
-      </form>
+      </CampaignDraftForm>
     </BrandShell>
   );
 }

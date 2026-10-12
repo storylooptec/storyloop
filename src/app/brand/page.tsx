@@ -36,7 +36,7 @@ export default async function BrandLandingPage({ searchParams }: Props) {
         </nav>
         <div className={styles.headerActions}>
           <a className={styles.textButton} href="#login">Sign in</a>
-          <a className={styles.outlineButton} href="#login">Talk to Storyloop</a>
+          <a className={styles.outlineButton} href="/brand/register">Create account</a>
         </div>
       </header>
 
@@ -56,7 +56,7 @@ export default async function BrandLandingPage({ searchParams }: Props) {
           </div>
 
           <div className={styles.heroActions}>
-            <a className={styles.primaryButton} href="#login">Start a campaign <span aria-hidden="true">→</span></a>
+            <a className={styles.primaryButton} href="/brand/register">Start a campaign <span aria-hidden="true">→</span></a>
             <a className={styles.textButton} href="#platform">See how it works</a>
           </div>
 
@@ -88,10 +88,10 @@ export default async function BrandLandingPage({ searchParams }: Props) {
             <button className={styles.primaryButton} type="submit">Sign in</button>
             <div id="email-code" className={styles.loginForm}>
               <span className={styles.muted}>Or sign in without a password</span>
-              <button className={styles.secondaryButton} type="submit" formAction={sendBrandEmailCodeAction}>Continue with email code</button>
+              <button className={styles.secondaryButton} type="submit" formAction={sendBrandEmailCodeAction} formNoValidate>Continue with email code</button>
             </div>
           </form>
-          <p className={styles.loginFoot}>New to Storyloop? <span>Ask your Storyloop contact for workspace access.</span></p>
+          <p className={styles.loginFoot}>New to Storyloop? <Link href="/brand/register">Create your account</Link></p>
         </aside>
       </section>
 

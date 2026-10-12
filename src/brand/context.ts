@@ -25,7 +25,8 @@ export async function requireBrandContext(): Promise<BrandContext> {
     .limit(1)
     .maybeSingle();
 
-  if (membershipError || !membership) redirect("/brand?error=access");
+  if (membershipError) redirect("/brand?error=access");
+  if (!membership) redirect("/brand/setup");
 
   const { data: company, error: companyError } = await supabase
     .from("companies")

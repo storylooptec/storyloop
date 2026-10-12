@@ -45,7 +45,8 @@ export async function GET(request: Request) {
     return new Response(body, {
       headers: {
         "Content-Type": result.ContentType ?? "image/webp",
-        "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+        "Cache-Control": isPublicStoryloopLogo ? "public, max-age=3600, stale-while-revalidate=86400" : "private, no-store",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch {

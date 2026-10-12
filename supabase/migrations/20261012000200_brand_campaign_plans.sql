@@ -1,6 +1,6 @@
 -- Editable campaign plan storage and an atomic OpenAI generation quota.
 alter table public.brand_campaigns
-  add column requested_budget_cents integer
+  add column requested_budget_cents bigint
     check (requested_budget_cents is null or requested_budget_cents >= 0);
 
 create table public.brand_campaign_plans (
@@ -122,9 +122,9 @@ returns boolean
 language sql
 security definer
 set search_path = pg_catalog, app_private
-as $
+as $$
   select app_private.consume_openai_brief_quota(target_company_id, target_campaign_id);
-$;
+$$;
 
 revoke all on function public.consume_openai_brief_quota(uuid, uuid) from public, anon;
 grant execute on function public.consume_openai_brief_quota(uuid, uuid) to authenticated;
