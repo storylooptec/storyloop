@@ -36,6 +36,11 @@ export async function createCampaignDraftAction(formData: FormData) {
   const promotedItem = String(formData.get("promoted_item") ?? "").trim().slice(0, 240);
   const objective = String(formData.get("objective") ?? "");
   const titleValue = String(formData.get("title") ?? "").trim().slice(0, 120);
+  const budgetValue = String(formData.get("budget_inr") ?? "").trim();
+  const budgetInr = budgetValue ? Number(budgetValue) : null;
+  if (budgetInr !== null && (!Number.isFinite(budgetInr) || budgetInr < 0 || budgetInr > 1000000000)) {
+    throw new Error("Enter a valid budget in INR.");
+  }
   const deliverables = formData
     .getAll("deliverable")
     .map((value) => String(value))
@@ -73,6 +78,7 @@ export async function createCampaignDraftAction(formData: FormData) {
       promoted_item: promotedItem,
       objective,
       deliverables,
+      requested_budget_cents: budgetInr === null ? null : Math.round(budgetInr * 100),
       status: "draft",
     })
     .select("id")
