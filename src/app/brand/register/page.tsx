@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { brandRegistrationMessage } from "@/brand/registration";
 import { PasswordInput } from "@/components/brand/password-input";
 import { registerBrandAction } from "../actions";
 import styles from "../brand.module.css";
@@ -8,7 +9,7 @@ export default async function RegisterBrandPage({searchParams}:{searchParams:Pro
     <div className={styles.loginCard}><Link href="/brand" className={styles.textButton}>← Storyloop for brands</Link>
       <p className={styles.eyebrow}>Get started</p><h1>Create your brand account</h1><p className={styles.loginIntro}>Verify your work email, then set up your campaign workspace.</p>
       {query.sent?<p role="status" className={styles.evidenceNote}>Check your email for a confirmation link. Once verified, sign in to create your workspace.</p>:null}
-      {query.error?<p role="alert" className={styles.error}>Check your email and use a password of at least 6 characters. If you already have an account, sign in.</p>:null}
+      {query.error?<p role="alert" className={styles.error}>{brandRegistrationMessage(query.error)}</p>:null}
       <form action={registerBrandAction} className={styles.loginForm}>
         <label className={styles.field}>Work email<input name="email" type="email" autoComplete="email" required maxLength={254}/></label>
         <div className={styles.field}>

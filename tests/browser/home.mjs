@@ -143,6 +143,24 @@ try {
     await page.waitForURL(url => url.searchParams.get('sent') === '1');
     assert.match(await page.getByRole('status').innerText(), /confirmation link/);
   }
+  for (const [email, code, message] of [
+    ['limited@example.test', 'rate_limit', /Too many attempts/],
+    ['weak@example.test', 'weak_password', /This password was not accepted/],
+    ['blocked@example.test', 'email_unavailable', /confirmation email to this address/],
+    ['unavailable@example.test', 'registration', /We couldn’t create your account/],
+  ]) {
+    await page.goto(origin + '/brand/register');
+    await page.getByLabel('Work email').fill(email);
+    await registrationPassword.fill('abc123');
+    await page.getByRole('button', { name: 'Create account', exact: true }).click();
+    await page.waitForURL(url => url.searchParams.get('error') === code);
+    assert.match(await page.locator('main').getByRole('alert').innerText(), message);
+  }
+  await page.goto(origin + '/brand/register?error=configuration');
+  const configurationMessage = await page.locator('main').getByRole('alert').innerText();
+  assert.match(configurationMessage, /registration is temporarily unavailable/);
+  assert.doesNotMatch(configurationMessage, /password|6 characters/);
+  console.log('PASS confirmation URL and distinct registration error messages');
   await page.goto(origin + '/brand');
   await page.getByLabel('Work email').fill('brand@example.test');
   await page.getByLabel('Password', { exact: true }).fill('abc123');

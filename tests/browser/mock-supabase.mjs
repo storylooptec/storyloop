@@ -15,9 +15,18 @@ const fixtures={
 };
 export function startMock(port=4545){return new Promise(resolve=>{const server=http.createServer(async(req,res)=>{
  const url=new URL(req.url,'http://localhost');res.setHeader('Content-Type','application/json');
+ res.setHeader('X-Supabase-Api-Version','2024-01-01');
  if(url.pathname==='/auth/v1/user'){res.end(JSON.stringify(user));return;}
  if(url.pathname==='/auth/v1/token'){res.statusCode=400;res.end(JSON.stringify({error:'invalid_grant',error_description:'Test credentials rejected'}));return;}
- if(url.pathname==='/auth/v1/signup'&&req.method==='POST'){res.end(JSON.stringify({user,session:null}));return;}
+ if(url.pathname==='/auth/v1/signup'&&req.method==='POST'){
+  if(url.searchParams.get('redirect_to')!=='http://127.0.0.1:3001/brand/auth/callback'){
+   res.statusCode=400;res.end(JSON.stringify({code:'validation_failed',msg:'Incorrect confirmation URL'}));return;
+  }
+  let body='';for await(const chunk of req)body+=chunk;const {email}=JSON.parse(body);
+  const failures={'limited@example.test':[429,'over_email_send_rate_limit'],'weak@example.test':[422,'weak_password'],'blocked@example.test':[403,'email_address_not_authorized'],'unavailable@example.test':[500,'unexpected_failure']};
+  if(failures[email]){const [status,code]=failures[email];res.statusCode=status;res.end(JSON.stringify({code,msg:'Local Auth fixture failure'}));return;}
+  res.end(JSON.stringify({user,session:null}));return;
+ }
  if(url.pathname==='/auth/v1/logout'){res.end('{}');return;}
  if(url.pathname.startsWith('/rest/v1/rpc/')){res.end('[]');return;}
  const name=url.pathname.split('/').at(-1);let rows=structuredClone(fixtures[name]??[]);

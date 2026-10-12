@@ -1,7 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
+import { brandRegistrationError, brandRegistrationRedirect } from "@/brand/registration";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function validEmail(value: string): boolean {
@@ -87,15 +89,24 @@ export async function signOutBrandAction() {
 }
 
 export async function registerBrandAction(formData: FormData) {
-  const email=String(formData.get("email")??"").trim().toLowerCase();
-  const password=String(formData.get("password")??"");
-  if(!validEmail(email)||password.length<6||password.length>128)redirect("/brand/register?error=details");
-  const site=process.env.NEXT_PUBLIC_SITE_URL;
-  if(!site)redirect("/brand/register?error=configuration");
-  const db=await createServerSupabaseClient();
-  const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:new URL("/brand/auth/callback",site).toString()}});
-  if(error)redirect("/brand/register?error=registration");
-  if(data.session)redirect("/brand/setup");
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  if (!validEmail(email) || email.length > 254 || password.length < 6 || password.length > 128) {
+    redirect("/brand/register?error=details");
+  }
+  const emailRedirectTo = brandRegistrationRedirect(process.env, (await headers()).get("origin"));
+  if (!emailRedirectTo) {
+    console.error("[brand-registration] No trusted confirmation URL for this request.");
+    redirect("/brand/register?error=configuration");
+  }
+  const db = await createServerSupabaseClient();
+  const { data, error } = await db.auth.signUp({ email, password, options: { emailRedirectTo } });
+  if (error) {
+    // Keep credentials, addresses and raw provider responses out of logs and URLs.
+    console.error("[brand-registration] Auth signup failed", { code: error.code ?? "unknown", status: error.status });
+    redirect(`/brand/register?error=${brandRegistrationError(error)}`);
+  }
+  if (data.session) redirect("/brand/setup");
   redirect("/brand/register?sent=1");
 }
 export async function createBrandWorkspaceAction(formData:FormData) {

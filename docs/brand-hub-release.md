@@ -46,7 +46,7 @@ Configure Vercel Preview and Production separately. Never use `NEXT_PUBLIC_` for
 |---|---|
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Existing target project and public client key. |
 | `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` | Server-only trusted writes for reservations, provider observations and telemetry. Required even for campaign creation telemetry. |
-| `NEXT_PUBLIC_SITE_URL` | Exact environment origin for sign-up callback; also allow its `/brand/auth/callback` in Supabase Auth redirects. |
+| `NEXT_PUBLIC_SITE_URL` | Explicit allowed site origin. Registration also accepts `VERCEL_URL`, `VERCEL_PROJECT_PRODUCTION_URL` and `VERCEL_BRANCH_URL` from the deployment, so this setting may be omitted when system environment variables are available. The callback stays on the submitting origin to preserve its PKCE cookie. Allow each tested origin’s exact `/brand/auth/callback` in Supabase Auth redirects. Arbitrary request hosts are not accepted. |
 | `SERP_API_KEY`, `SERP_API_ENABLED` | SerpApi key; enable only after dry-run/schema verification. Key name intentionally follows the existing deployment. |
 | `SERP_API_COST_PER_SEARCH_USD` | Account-specific per-search estimate, or leave empty and show unreported. A configured USD budget requires an estimate. |
 | `OPENAI_API_KEY`, `OPENAI_API_ENABLED`, `OPENAI_BRIEF_MODEL` | Server key and selected structured-output model; default model is `gpt-4.1-mini`. Set enabled to false to pause. |
