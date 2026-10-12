@@ -197,6 +197,18 @@ revoke all on function app_private.consume_serpapi_scan_quota(uuid) from public,
 revoke all on function app_private.is_storyloop_operator(text) from public, anon;
 grant execute on function app_private.is_brand_member(uuid) to authenticated;
 grant execute on function app_private.consume_serpapi_scan_quota(uuid) to authenticated;
+
+create or replace function public.consume_serpapi_scan_quota(target_company_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = pg_catalog, app_private
+as $
+  select app_private.consume_serpapi_scan_quota(target_company_id);
+$;
+
+revoke all on function public.consume_serpapi_scan_quota(uuid) from public, anon;
+grant execute on function public.consume_serpapi_scan_quota(uuid) to authenticated;
 grant execute on function app_private.is_storyloop_operator(text) to authenticated;
 
 alter table public.brand_memberships enable row level security;
