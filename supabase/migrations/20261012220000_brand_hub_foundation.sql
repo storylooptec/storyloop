@@ -53,6 +53,10 @@ create table public.brand_competitor_scans (
 create index brand_competitor_scans_campaign_created_idx
   on public.brand_competitor_scans(campaign_id, created_at desc);
 
+create unique index brand_competitor_one_active_scan_per_campaign_idx
+  on public.brand_competitor_scans(campaign_id)
+  where status in ('queued', 'running');
+
 create table public.brand_competitor_observations (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies(id) on delete cascade,
@@ -103,6 +107,17 @@ create index external_api_usage_events_company_created_idx
 create index external_api_usage_events_campaign_created_idx
   on public.external_api_usage_events(campaign_id, created_at desc);
 
+create table public.api_rate_limit_windows (
+  company_id uuid not null references public.companies(id) on delete cascade,
+  provider_key text not null,
+  window_start date not null,
+  calls_used integer not null default 0 check (calls_used >= 0),
+  updated_at timestamptz not null default now(),
+  primary key (company_id, provider_key, window_start)
+);
+
+alter table public.api_rate_limit_windows enable row level security;
+
 create or replace function app_private.is_brand_member(target_company_id uuid)
 returns boolean
 language sql
@@ -140,9 +155,48 @@ as $$
     );
 $$;
 
+create or replace function app_private.consume_serpapi_scan_quota(target_company_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public, app_private
+as $
+declare
+  quota_window date := (now() at time zone 'UTC')::date;
+  used_count integer;
+begin
+  if not app_private.is_brand_member(target_company_id) then
+    return false;
+  end if;
+
+  insert into public.api_rate_limit_windows (company_id, provider_key, window_start, calls_used)
+  values (target_company_id, 'serpapi', quota_window, 0)
+  on conflict (company_id, provider_key, window_start) do nothing;
+
+  select calls_used into used_count
+  from public.api_rate_limit_windows
+  where company_id = target_company_id
+    and provider_key = 'serpapi'
+    and window_start = quota_window
+  for update;
+
+  if used_count >= 3 then return false; end if;
+
+  update public.api_rate_limit_windows
+  set calls_used = calls_used + 1, updated_at = now()
+  where company_id = target_company_id
+    and provider_key = 'serpapi'
+    and window_start = quota_window;
+
+  return true;
+end;
+$;
+
 revoke all on function app_private.is_brand_member(uuid) from public, anon;
+revoke all on function app_private.consume_serpapi_scan_quota(uuid) from public, anon;
 revoke all on function app_private.is_storyloop_operator(text) from public, anon;
 grant execute on function app_private.is_brand_member(uuid) to authenticated;
+grant execute on function app_private.consume_serpapi_scan_quota(uuid) to authenticated;
 grant execute on function app_private.is_storyloop_operator(text) to authenticated;
 
 alter table public.brand_memberships enable row level security;
@@ -154,7 +208,7 @@ alter table public.external_api_usage_events enable row level security;
 grant select on public.brand_memberships to authenticated;
 grant insert, update on public.brand_memberships to authenticated;
 grant select, insert, update on public.brand_campaigns to authenticated;
-grant select, insert on public.brand_competitor_scans to authenticated;
+grant select, insert, update on public.brand_competitor_scans to authenticated;
 grant select, insert on public.brand_competitor_observations to authenticated;
 grant select, insert on public.external_api_usage_events to authenticated;
 
@@ -200,6 +254,11 @@ with check (
       and c.company_id = brand_competitor_scans.company_id
   )
 );
+
+create policy "brand members update their competitor scans"
+on public.brand_competitor_scans for update to authenticated
+using (app_private.is_brand_member(company_id))
+with check (app_private.is_brand_member(company_id));
 
 create policy "brand members read their competitor observations"
 on public.brand_competitor_observations for select to authenticated
