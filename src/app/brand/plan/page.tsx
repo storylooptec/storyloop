@@ -10,7 +10,7 @@ import { approveCampaignBriefAction, generateCampaignBriefAction, saveCampaignBr
 
 type Props = { searchParams: Promise<{ campaign?: string; error?: string; generated?: string; approved?: string; saved?: string }> };
 type Evidence = { id: string; competitor_name: string; source_title: string; source_url: string; source_snippet: string; observed_at: string; evidence_kind: string };
-const customerKinds = ["reddit_excerpt", "amazon_review"];
+const customerKinds = ["reddit_excerpt", "amazon_review", "social_comment"];
 function errorText(value?: string) {
   const messages: Record<string, string> = {
     no_evidence: "Confirm competitors and collect their evidence before generating a brief.", provider: "Brief generation is not configured in this environment.",
@@ -23,7 +23,7 @@ function errorText(value?: string) {
     submission_unknown: "The provider has not confirmed this request. It will not be retried automatically; check API Health before starting another generation.",
     save: "Your changes could not be saved. Please retry.", no_plan: "Generate a draft brief before approving it.",
     conflict: "This brief changed in another session. The latest saved version is shown below; review it before editing again.",
-    citations: "Each nonempty hypothesis needs valid sources. Pain-area hypotheses need Reddit or Amazon review evidence. Check the field lengths too.",
+    citations: "Each nonempty hypothesis needs valid sources. Pain-area hypotheses need retrieved comment or review evidence. Check the field lengths too.",
     read_only: "This campaign has launched or closed. Its approved plan is read-only.",
     operation_in_progress: "A generation is already running for this campaign. Refresh in a moment.",
   };

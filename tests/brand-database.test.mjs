@@ -85,6 +85,12 @@ before(async () => {
     const sql = readFileSync(root + "supabase/migrations/" + file, "utf8").replace("create extension if not exists pgcrypto;", "");
     try { await db.exec(sql); } catch (error) { throw new Error(`Migration ${file}: ${error.message}`, { cause: error }); }
   }
+  // Validate scheduler SQL locally with a network sink; no HTTP request is made.
+  await db.exec(`create schema net; create schema cron;
+    create table net.test_requests(url text,headers jsonb);
+    create function net.http_post(url text,body jsonb default '{}',params jsonb default '{}',headers jsonb default '{}',timeout_milliseconds integer default 2000) returns bigint language plpgsql as $$ begin insert into net.test_requests values(url,headers); return 1; end; $$;
+    create function cron.schedule(text,text,text) returns bigint language sql as $$ select 1::bigint $$;`);
+  await db.exec(readFileSync(root+'supabase/setup/competition-scheduler.sql','utf8').replace(/create extension if not exists pg_(?:cron|net);/g,''));
   for (const user of [id.userA, id.userB, id.operator, id.creatorUser]) await q("insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())", [user, `${user}@example.test`]);
   storyloopId = (await one("select id from companies where slug='storyloop'")).id;
   await q("insert into companies(id,name,slug) values($1,'Brand A','test-brand-a'),($2,'Brand B','test-brand-b')", [id.companyA, id.companyB]);
@@ -327,4 +333,88 @@ scenario('Supabase asset buckets are private and direct client file access is de
   }
   await role('service_role');
   assert.equal((await one('select count(*)::int as n from storage.objects')).n,1);
+});
+
+async function enqueueResearch(campaign = id.campaignA, hash = 'a'.repeat(64)) {
+  return (await one('select enqueue_research_scan($1,$2,$3,$4,$5::jsonb) as value',[id.companyA,campaign,id.userA,hash,JSON.stringify({brand:'A',product:'Product',market:'IN'})])).value;
+}
+async function researchTask(scan, key = randomUUID()) {
+  await q("insert into brand_research_tasks(company_id,campaign_id,scan_id,kind,dedupe_key,deadline_at) values($1,$2,$3,'discovery',$4,now()+interval '30 minutes')",[id.companyA,id.campaignA,scan,key]);
+  return (await one('select claim_research_task($1) as value',[randomUUID()])).value;
+}
+async function researchReserve(task, provider='searchapi', cost=0, input=0, output=0) {
+  return (await one('select reserve_research_attempt($1,$2,$3,$4,$5,$6) as value',[task.id,task.lease_token,provider,cost,input,output])).value;
+}
+async function researchAccount() {
+  await q('select update_research_account($1::jsonb)',[JSON.stringify({remainingCredits:1000,hourlyRateLimit:3600,searchesThisHour:0})]);
+}
+scenario('research enqueue deduplicates active work and cached campaigns without consuming a fresh quota',async()=>{
+  await role('service_role');
+  const first=await enqueueResearch();
+  assert.equal((await enqueueResearch()).scan_id,first.scan_id);
+  await q("update brand_competitor_scans set status='succeeded',cache_expires_at=now()+interval '24 hours' where id=$1",[first.scan_id]);
+  assert.equal((await enqueueResearch()).disposition,'cached');
+  const campaign=randomUUID();
+  await q("insert into brand_campaigns(id,company_id,created_by,title,brand_name,promoted_item,objective) values($1,$2,$3,'Other','A','Product','awareness')",[campaign,id.companyA,id.userA]);
+  const clone=await enqueueResearch(campaign);
+  assert.equal((await one('select cache_from_scan_id from brand_competitor_scans where id=$1',[clone.scan_id])).cache_from_scan_id,first.scan_id);
+  await q("update brand_competitor_scans set status='failed' where provider_key='searchapi'");
+  for(const hash of ['b','c']) {const s=await enqueueResearch(id.campaignA,hash.repeat(64)); await q("update brand_competitor_scans set status='failed' where id=$1",[s.scan_id]);}
+  await fails('select enqueue_research_scan($1,$2,$3,$4,$5::jsonb)',[id.companyA,id.campaignA,id.userA,'d'.repeat(64),'{}'],/scan_daily_limit/);
+  await fails('select enqueue_research_scan($1,$2,$3,$4,$5::jsonb)',[id.companyB,id.campaignB,id.userA,'d'.repeat(64),'{}'],/campaign_access/);
+});
+scenario('research reservations enforce pacing, two simultaneous calls, and the 32-attempt ceiling',async()=>{
+  await role('service_role'); await researchAccount();
+  const scan=(await enqueueResearch()).scan_id;
+  const first=await researchTask(scan); const paid=await researchReserve(first); assert.equal(paid.allowed,true);
+  const second=await researchTask(scan); assert.equal((await researchReserve(second)).error,'provider_pacing');
+  await q('update brand_research_control set next_dispatch_at=null'); assert.equal((await researchReserve(second)).allowed,true);
+  const third=await researchTask(scan); assert.equal((await researchReserve(third)).error,'provider_concurrency');
+  await q("select finish_research_attempt($1,$2,'{\"status\":\"success\"}')",[paid.attempt_id,first.lease_token]);
+  await q('update brand_competitor_scans set requests_used=32 where id=$1',[scan]);
+  assert.equal((await researchReserve(third)).error,'scan_request_limit');
+});
+scenario('research unknown paid outcomes are not retried; persisted responses survive lease expiry',async()=>{
+  await role('service_role'); await researchAccount();
+  const scan=(await enqueueResearch()).scan_id; const first=await researchTask(scan); await researchReserve(first);
+  await q("update brand_research_tasks set lease_expires_at=now()-interval '1 second' where id=$1",[first.id]);
+  await q('select recover_research_tasks()');
+  assert.equal((await one('select status from brand_research_tasks where id=$1',[first.id])).status,'uncertain');
+  assert.equal((await one('select status from brand_research_attempts where task_id=$1',[first.id])).status,'uncertain');
+  await q('update brand_research_control set next_dispatch_at=null');
+  const second=await researchTask(scan); const paid=await researchReserve(second);
+  await q("update brand_research_tasks set result='{\"response\":{\"hits\":[]}}',lease_expires_at=now()-interval '1 second' where id=$1",[second.id]);
+  const resumed=(await one('select claim_research_task($1) as value',[randomUUID()])).value;
+  assert.equal(resumed.id,second.id);
+  await q("select finish_research_attempt($1,$2,'{\"status\":\"success\"}')",[paid.attempt_id,resumed.lease_token]);
+  assert.equal((await one('select count(*)::int as n from brand_research_attempts where task_id=$1',[second.id])).n,1);
+});
+scenario('research OpenAI budgets, nonce replay protection, and tenant isolation are enforced in PostgreSQL',async()=>{
+  await role('service_role'); const scan=(await enqueueResearch()).scan_id; const task=await researchTask(scan);
+  assert.equal((await researchReserve(task,'openai',11,1000,1000)).error,'platform_daily_budget');
+  assert.equal((await researchReserve(task,'openai',0.01,600001,1000)).error,'scan_token_limit');
+  assert.equal((await researchReserve(task,'openai',0.01,1000,1000)).allowed,true);
+  const nonce='a'.repeat(64);
+  await q("insert into app_private.research_worker_nonces(nonce_hash,expires_at) values(encode(sha256(convert_to($1,'UTF8')),'hex'),now()+interval '2 minutes')",[nonce]);
+  assert.equal((await one('select consume_research_worker_nonce($1) as ok',[nonce])).ok,true);
+  assert.equal((await one('select consume_research_worker_nonce($1) as ok',[nonce])).ok,false);
+  await role('authenticated',id.userB); assert.equal((await q('select id from brand_research_tasks')).rows.length,0);
+  await role('authenticated',id.userA); assert.equal((await q('select id from brand_research_tasks')).rows.length,1);
+  await fails('select payload from brand_research_tasks');
+  await fails('select claim_research_task($1)',[randomUUID()]);
+  await role('anon'); await fails('select consume_research_worker_nonce($1)',[nonce]);
+});
+
+scenario('research scheduler is idle without scans and issues a single-use capability only for active campaigns',async()=>{
+  await q('select app_private.dispatch_competition_research()');
+  assert.equal((await one('select count(*)::int as n from net.test_requests')).n,0);
+  await role('service_role'); const scan=(await enqueueResearch()).scan_id;
+  await role('postgres'); await q('select app_private.dispatch_competition_research()');
+  const request=await one('select * from net.test_requests');
+  assert.match(request.headers.Authorization,/^Bearer [0-9a-f]{64}$/);
+  await q('select app_private.dispatch_competition_research()');
+  assert.equal((await one('select count(*)::int as n from net.test_requests')).n,1);
+  await q("update brand_competitor_scans set deadline_at=now()-interval '1 second' where id=$1",[scan]);
+  await q('select app_private.dispatch_competition_research()');
+  assert.equal((await one('select status from brand_competitor_scans where id=$1',[scan])).status,'failed');
 });

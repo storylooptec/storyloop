@@ -1,0 +1,80 @@
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {setTimeout as pause} from 'node:timers/promises';
+import {fileURLToPath} from 'node:url';
+import {mkdir} from 'node:fs/promises';
+import {chromium} from 'playwright';
+import {startResearchFixture,sessionCookie,campaignId,researchState} from './research-fixture.mjs';
+
+const fixture=await startResearchFixture();
+const origin='http://127.0.0.1:3001';
+const server=spawn(process.execPath,['--import',fileURLToPath(new URL('./research-network-guard.mjs',import.meta.url)),'node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3001'],{
+ env:{...process.env,SUPABASE_URL:'http://127.0.0.1:4545',SUPABASE_PUBLISHABLE_KEY:'test-public-key',SUPABASE_SECRET_KEY:'test-service-key',SUPABASE_SERVICE_ROLE_KEY:'',NEXT_PUBLIC_SITE_URL:origin,VERCEL_URL:'',VERCEL_PROJECT_PRODUCTION_URL:'',VERCEL_BRANCH_URL:'',SEARCHAPI_API_KEY:'test-key-not-real',SEARCHAPI_ENABLED:'true',OPENAI_API_KEY:'test-key-not-real',OPENAI_API_ENABLED:'true',OPENAI_INPUT_COST_PER_1M_USD:'1',OPENAI_OUTPUT_COST_PER_1M_USD:'1',SERP_API_ENABLED:'false',HIGGSFIELD_API_ENABLED:'false'},stdio:['ignore','pipe','pipe'],
+});
+let output='';server.stdout.on('data',data=>output+=data);server.stderr.on('data',data=>output+=data);
+let browser;
+try{
+ let ready=false;for(let i=0;i<100;i++){if(server.exitCode!==null)throw new Error(output);try{if((await fetch(origin+'/brand')).ok){ready=true;break;}}catch{}await pause(100);}assert.ok(ready,'Local fixture server starts');
+ browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTABLE_PATH||'/tmp/chromium',headless:true,args:['--no-sandbox','--disable-gpu','--disable-dev-shm-usage']});
+ const context=await browser.newContext({viewport:{width:1600,height:1040}});
+ await context.addCookies([{name:'sb-127-auth-token',value:sessionCookie(),domain:'127.0.0.1',path:'/',sameSite:'Lax'}]);
+ const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ let polls=0;page.on('request',request=>{if(request.url().includes('/api/brand/campaigns/')&&request.url().includes('/research'))polls++;});
+ await page.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+ const path=`/brand/campaigns/${campaignId}/competitors`;
+ await page.goto(origin+path);
+ await page.getByRole('button',{name:'Scan competition',exact:true}).evaluate(node=>{node.click();node.click();});
+ await page.getByRole('heading',{name:'Your scan is queued'}).waitFor();
+ assert.equal(researchState.enqueues,1,'Repeated click creates one job');
+ assert.equal(await page.getByRole('button',{name:'Scan in progress…',exact:true}).isDisabled(),true);
+ researchState.phase='running';
+ await page.getByRole('heading',{name:'Collecting competitor evidence'}).waitFor({timeout:12000});
+ assert.match(await page.getByLabel('Competitor research').innerText(),/You can leave this page/);
+ researchState.phase='complete';
+ await page.getByRole('heading',{name:'Your competitor shortlist'}).waitFor({timeout:12000});
+ assert.equal(await page.getByRole('checkbox').count(),5);
+ const cards=page.locator('article').filter({has:page.getByRole('checkbox')});
+ const boxes=await cards.evaluateAll(nodes=>nodes.map(node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width};}));
+ assert.equal(boxes[0].y,boxes[2].y,'First three cards share desktop row');assert.equal(boxes[3].y,boxes[4].y,'Final two cards share desktop row');assert.ok(boxes[3].y>boxes[0].y);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Desktop has no horizontal overflow');
+ await mkdir('tests/browser/artifacts',{recursive:true});await page.locator('main').screenshot({path:'tests/browser/artifacts/research-desktop.png'});
+ const first=cards.first();
+ for(const label of ['Ads','Posts','Comments']){
+  const trigger=first.getByRole('button',{name:label,exact:true});await trigger.click();
+  const dialog=page.getByRole('dialog');await dialog.waitFor();
+  assert.equal(await dialog.getByRole('tab',{name:label,exact:true}).getAttribute('aria-selected'),'true');
+  assert.ok(await dialog.getByRole('link',{name:/Open original (source|ad) ↗/}).count()>0);
+  assert.equal(await dialog.getByRole('link',{name:/Open original (source|ad) ↗/}).first().getAttribute('target'),'_blank');
+  assert.match(await dialog.innerText(),/Retrieved/);assert.match(await dialog.innerText(),/saved results/i);
+  for(let i=0;i<8;i++)await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(()=>document.querySelector('dialog').contains(document.activeElement)),true,'Focus stays in the evidence drawer');
+  await page.keyboard.press('Escape');await dialog.waitFor({state:'detached'});
+  assert.equal(await trigger.evaluate(node=>node===document.activeElement),true,'Focus returns to the evidence trigger');
+ }
+ await first.getByRole('button',{name:'View full profile →'}).click();
+ await page.getByRole('tab',{name:'Full profile'}).focus();await page.keyboard.press('ArrowRight');
+ assert.equal(await page.getByRole('tab',{name:'Ads',exact:true}).getAttribute('aria-selected'),'true');await page.keyboard.press('Escape');
+ assert.equal(await cards.nth(4).getByRole('button',{name:'Comments',exact:true}).isDisabled(),true,'Unavailable comments have no evidence action');
+ await cards.nth(3).getByRole('button',{name:'Ads',exact:true}).click();
+ assert.equal(await page.getByRole('dialog').getByRole('link',{name:/Open original (source|ad) ↗/}).count(),0,'Unsafe evidence link is not rendered');await page.keyboard.press('Escape');
+ const pollsAfterComplete=polls;await pause(3500);assert.equal(polls,pollsAfterComplete,'Polling stops when research completes');
+ assert.equal(researchState.enqueues,1,'Browsing saved evidence creates no further scan');
+ await first.getByRole('checkbox').check();await cards.nth(2).getByRole('checkbox').check();
+ await page.getByRole('button',{name:'Continue with selected →'}).click();
+ await page.waitForURL(`**/brand/plan?campaign=${campaignId}`);assert.equal(researchState.selections.length,2,'Two selected competitors are saved');
+ console.log('PASS queued → running → five bento cards → evidence drawer → two saved selections; one enqueue and no further provider work');
+ researchState.phase='partial';researchState.selections=[];
+ await page.setViewportSize({width:390,height:844});await page.goto(origin+path);
+ assert.equal(await page.getByRole('checkbox').count(),2,'Incomplete scan only displays verified competitors');
+ assert.match(await page.getByLabel('Competitor research').innerText(),/Only 2 brands could be verified/);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Mobile has no horizontal overflow');
+ await page.locator('main').screenshot({path:'tests/browser/artifacts/research-mobile.png'});
+ await page.getByRole('button',{name:'View full profile →'}).first().click();
+ assert.equal(await page.evaluate(()=>{const r=document.querySelector('dialog').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&document.querySelector('dialog').scrollWidth<=innerWidth;}),true,'Mobile drawer fits viewport');await page.keyboard.press('Escape');
+ researchState.readOnly=true;await page.reload();
+ assert.equal(await page.getByRole('button',{name:'Refresh competitor scan'}).isDisabled(),true);
+ for(const checkbox of await page.getByRole('checkbox').all())assert.equal(await checkbox.isDisabled(),true);
+ assert.equal(await page.getByRole('button',{name:'Continue with selected →'}).count(),0,'Launched campaign cannot alter selection');
+ console.log('PASS mobile, limited evidence, unsafe-link filtering, focus/keyboard, completed polling, and read-only campaign');
+ assert.deepEqual(errors,[],'No browser runtime errors');assert.doesNotMatch(output,/blocked an external request|Application error/);
+}finally{await browser?.close();if(server.exitCode===null){server.kill('SIGTERM');await new Promise(resolve=>server.once('exit',resolve));}await fixture.close();}

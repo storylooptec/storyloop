@@ -68,6 +68,12 @@ export type Database = {
         Update: { id?: string; company_id?: string; scan_id?: string; competitor_name?: string; competitor_domain?: string | null; source_url?: string; source_domain?: string; source_title?: string; source_snippet?: string; published_at?: string | null; observed_at?: string; content_hash?: string; created_at?: string; competitor_id?: string | null; evidence_kind?: string; source_record_key?: string; source_date_text?: string | null; provider_search_id?: string | null; attributes?: Json }
         Relationships: []
       }
+      brand_research_tasks: {
+        Row: { id: string; company_id: string; campaign_id: string; scan_id: string; kind: string; status: string; error_code: string | null; next_attempt_at: string; created_at: string; payload: Json; result: Json; dependencies: string[]; dedupe_key: string; attempt_count: number; deadline_at: string; lease_token: string | null; lease_expires_at: string | null }
+        Insert: { id?: string; company_id: string; campaign_id: string; scan_id: string; kind: string; status?: string; error_code?: string | null; next_attempt_at?: string; payload?: Json; result?: Json; dependencies?: string[]; dedupe_key: string; deadline_at: string }
+        Update: { status?: string; result?: Json; error_code?: string | null; next_attempt_at?: string }
+        Relationships: []
+      }
       brand_competitor_products: {
         Row: { id: string; company_id: string; campaign_id: string; competitor_id: string; scan_id: string; asin: string; amazon_domain: string; title: string; source_url: string; rating: number | null; review_count: number | null; price: number | null; price_text: string | null; currency: string | null; status: string; observed_at: string; provider_search_id: string | null }
         Insert: { id?: string; company_id: string; campaign_id: string; competitor_id: string; scan_id: string; asin: string; amazon_domain?: string; title: string; source_url: string; rating?: number | null; review_count?: number | null; price?: number | null; price_text?: string | null; currency?: string | null; status?: string; observed_at: string; provider_search_id?: string | null }
