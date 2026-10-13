@@ -5,6 +5,7 @@ import { BrandShell } from "@/components/brand/brand-shell";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import styles from "../../../brand.module.css";
 import { ResearchPanel, type ResearchSnapshot, type ResearchScan } from "./research-panel";
+import { SearchApiTestPanel } from "./searchapi-test-panel";
 
 type Props = { params: Promise<{ campaignId: string }>; searchParams: Promise<{ cached?: string; error?: string; saved?: string; created?: string; scan?: string }> };
 const when = (value: string) => new Date(value).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -51,6 +52,7 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
       <div className={styles.step}><span className={styles.stepIcon}>3</span><strong>Plan & creators</strong></div>
       <div className={styles.step}><span className={styles.stepIcon}>4</span><strong>Creative</strong></div>
     </nav>
+    <SearchApiTestPanel />
     {alert ? <p className={styles.error} role="alert">{alert}</p> : null}
     {query.cached ? <p className={styles.evidenceNote} role="status">Using saved research from the last 24 hours. This action sent no new search request.</p> : null}
     {query.saved ? <p className={styles.evidenceNote} role="status">Shortlist updated.</p> : null}

@@ -1,0 +1,14 @@
+.panel { margin: 0 0 22px; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.header h2 { margin: 0 0 6px; font-size: 17px; }
+.header p, .results p { margin: 0; font-size: 13px; line-height: 1.6; }
+.header form { flex-shrink: 0; }
+.query { margin: 16px 0 6px; font-size: 13px; }
+.note { margin: 6px 0; color: var(--brand-muted); font-size: 12px; line-height: 1.6; }
+.result { margin-top: 18px; border-top: 1px solid var(--brand-line); padding-top: 8px; }
+.success { color: #176342; font-size: 14px; font-weight: 600; }
+.results { margin: 16px 0 0; padding-left: 22px; }
+.results li { padding: 0 0 14px 5px; overflow-wrap: anywhere; }
+.results a { color: var(--brand-violet); font-size: 14px; font-weight: 600; }
+.url { display: block; margin: 4px 0; font-size: 11px; color: var(--brand-muted); }
+@media (max-width: 640px) { .header { align-items: flex-start; flex-direction: column; gap: 12px; } }
