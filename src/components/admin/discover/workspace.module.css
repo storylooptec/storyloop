@@ -1,0 +1,29 @@
+.workspace { min-width: 0; display: grid; gap: 20px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.toolbar label, .mapping label { display: grid; gap: 6px; font-size: 13px; }
+.toolbar input, .toolbar select, .mapping select { padding: 10px; border: 1px solid var(--sl-border, #39394b); background: var(--sl-surface, #191923); color: inherit; border-radius: 4px; max-width: 100%; }
+.toolbar input { min-width: 220px; }
+.notice { padding: 14px 18px; border: 1px solid var(--sl-border, #39394b); border-radius: 4px; line-height: 1.6; }
+.error { border-color: #e48989; color: #f7bcbc; }
+.tableWrap { min-width: 0; overflow: auto; max-height: 65vh; border: 1px solid var(--sl-border, #39394b); }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--sl-border, #39394b); vertical-align: top; }
+.table th { white-space: nowrap; background: var(--sl-surface, #191923); position: sticky; top: 0; z-index: 1; }
+.table td { min-width: 90px; max-width: 260px; overflow-wrap: anywhere; }
+.table td:first-child { min-width: 165px; }
+.table .number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.table a, .link { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.link { border: none; padding: 0; background: none; cursor: pointer; text-align: left; }
+.small { display: block; font-size: 12px; opacity: .8; margin-top: 5px; }
+.pager { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+.dialog { width: min(950px, 94vw); max-height: 90vh; overflow: auto; background: var(--sl-surface, #191923); color: inherit; border: 1px solid var(--sl-border, #39394b); padding: 24px; }
+.dialog::backdrop { background: #000a; }
+.detail { display: grid; grid-template-columns: repeat(auto-fit,minmax(230px,1fr)); gap: 16px; }
+.detail div { border-bottom: 1px solid var(--sl-border, #39394b); padding-bottom: 10px; overflow-wrap: anywhere; }
+.detail dt { font-size: 12px; opacity: .75; }
+.detail dd { margin: 6px 0 0; white-space: pre-wrap; }
+.dialog pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.mapping { display: grid; grid-template-columns: repeat(auto-fit,minmax(210px,1fr)); gap: 12px; }
+.import { min-width: 0; display: grid; gap: 16px; }
+.import button:disabled, .workspace button:disabled { opacity: .5; cursor: not-allowed; }
+@media(max-width: 600px) { .toolbar { flex-direction: column; align-items: stretch; } .toolbar input { min-width: 0; } .dialog { padding: 16px; } }

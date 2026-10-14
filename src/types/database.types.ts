@@ -836,6 +836,9 @@ export type Database = {
       }
     }
     Functions: {
+      // Requires supabase/setup/discover-import.sql (proposed, not applied).
+      discover_import_ready: { Args: { p_company_id: string }; Returns: boolean }
+      import_discover_creator: { Args: { p_company_id: string; p_record: Json }; Returns: Json }
       begin_provider_operation: { Args: { target_company_id: string; target_campaign_id: string; actor_id: string; provider: string; operation_name: string; model_name: string | null; dedupe_key: string; reserved_cost: number | null }; Returns: Json }
       finish_provider_operation: { Args: { event_id: string; outcome: Json }; Returns: undefined }
       save_brand_campaign_brief: { Args: { target_campaign_id: string; expected_revision: number; updated_brief: Json; approve?: boolean; source_model?: string | null }; Returns: number }
