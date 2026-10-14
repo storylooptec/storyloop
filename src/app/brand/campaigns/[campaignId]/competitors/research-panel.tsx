@@ -82,6 +82,15 @@ export function ResearchPanel({ campaign, initial, readOnly, activeScanId }: { c
   const available = competitors.filter((item) => item.status !== "rejected" && !!item.verified_at).slice(0, 5);
   const selectedCount = available.filter((item) => selected.has(item.id)).length;
   const selectedCompetitor = drawer ? competitors.find((item) => item.id === drawer.competitorId) : undefined;
+  // Tasks update before the scan's stage checkpoint. Do not show "checking
+  // identities" after all identity tasks have already finished.
+  const verification = tasks.filter(task => task.kind === "verify");
+  const evidenceTasks = tasks.filter(task => task.kind !== "fallback" && stages[2].kinds.includes(task.kind));
+  const pendingFallback = tasks.some(task => task.kind === "fallback" && !terminal(task.status));
+  const progressStage = tasks.some(task => task.kind === "summarize" && (task.status !== "queued" || evidenceTasks.every(task => terminal(task.status)))) ? "report"
+    : evidenceTasks.length > 0 || verification.length > 0 && verification.every(task => terminal(task.status)) && !pendingFallback ? "evidence"
+    : tasks.some(task => ["extract", "verify"].includes(task.kind)) ? "verification" : scan?.stage;
+  const progressScan = scan ? { ...scan, stage: progressStage } : null;
   const partial = !!scan?.error_code || tasks.some((task) => ["failed", "uncertain"].includes(task.status));
 
   useEffect(() => {
@@ -147,8 +156,8 @@ export function ResearchPanel({ campaign, initial, readOnly, activeScanId }: { c
     <section className={styles.researchArea} aria-label="Competitor research">
       <div className={styles.researchContext}><strong>{campaign.brand_name} — {campaign.promoted_item}</strong><span>India · {campaign.objective.replaceAll("_", " ")}</span></div>
       {starting || running ? <div className={styles.progress}>
-        <div className={styles.sectionHeading}><div className={styles.progressHeading}><span className={styles.spinner} aria-hidden="true" /><div><h2>{starting ? "Queuing your research" : scan?.status === "queued" ? "Your scan is queued" : scan?.stage === "verification" ? "Checking competitor identities" : scan?.stage === "evidence" ? "Collecting competitor evidence" : scan?.stage === "report" ? "Preparing your report" : "Finding competitors"}</h2><p>{starting ? "Saving your request so progress can continue in the background." : scan?.status === "queued" ? "Your research will start when a research slot is available." : "Verified sources and findings are saved as research progresses."}</p></div></div><span className={styles.status} role="status">{starting || scan?.status === "queued" ? "Queued" : "In progress"}</span></div>
-        <ol className={styles.progressSteps}>{stages.map((stage, index) => { const state = starting ? "Waiting" : stageState(stage, index, scan, tasks); return <li key={stage.id} data-state={state}><span className={styles.stepNumber} aria-hidden="true">{state === "Complete" ? "✓" : index + 1}</span><strong>{stage.title}</strong><span>{state}</span></li>; })}</ol>
+        <div className={styles.sectionHeading}><div className={styles.progressHeading}><span className={styles.spinner} aria-hidden="true" /><div><h2>{starting ? "Queuing your research" : scan?.status === "queued" ? "Your scan is queued" : progressStage === "verification" ? "Checking competitor identities" : progressStage === "evidence" ? "Collecting competitor evidence" : progressStage === "report" ? "Preparing your report" : "Finding competitors"}</h2><p>{starting ? "Saving your request so progress can continue in the background." : scan?.status === "queued" ? "Your research will start when a research slot is available." : "Verified sources and findings are saved as research progresses."}</p></div></div><span className={styles.status} role="status">{starting || scan?.status === "queued" ? "Queued" : "In progress"}</span></div>
+        <ol className={styles.progressSteps}>{stages.map((stage, index) => { const state = starting ? "Waiting" : stageState(stage, index, progressScan, tasks); return <li key={stage.id} data-state={state}><span className={styles.stepNumber} aria-hidden="true">{state === "Complete" ? "✓" : index + 1}</span><strong>{stage.title}</strong><span>{state}</span></li>; })}</ol>
         {pollError ? <p className={styles.notice} role="status">{pollError}</p> : null}
         <div className={styles.progressFooter}><p>{starting ? "Your scan will be saved before you leave this page." : "You can leave this page. Research will continue and results will be saved."}</p>{!starting ? <Link className={brand.secondaryButton} href="/brand/home">Back to workspace</Link> : null}</div>
       </div> : null}

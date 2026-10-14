@@ -33,36 +33,43 @@ async function addTask(scan: ResearchScan, kind: string, key: string, payload: R
   return id;
 }
 async function setStage(scan: ResearchScan, stage: string) {
+  if (scan.stage === stage) return;
   await checked(db().from("brand_competitor_scans").update({ stage }).eq("id", scan.id).in("status", ["queued", "running"]));
 }
 const payloadOf = (task: ResearchTask): SearchApiPayload | null => task.result?.response && Array.isArray(objectValue(task.result.response).hits) ? task.result.response as SearchApiPayload : null;
 
 /** Reconstruct the next tasks from persisted results; crashes cannot produce duplicate searches. */
 async function advance(scan: ResearchScan) {
-  if (scan.cache_from_scan_id) {
-    await addTask(scan, "clone", "clone", { source_scan_id: scan.cache_from_scan_id }); return;
-  }
   let tasks = await tasksFor(scan);
+  const known = new Set(tasks.map(task => task.dedupe_key));
+  async function ensureTask(kind: string, key: string, payload: Record<string, unknown>, dependencies: string[] = [], status = "queued") {
+    if (known.has(key)) return;
+    await addTask(scan, kind, key, payload, dependencies, status);
+    known.add(key);
+  }
+  if (scan.cache_from_scan_id) {
+    await ensureTask("clone", "clone", { source_scan_id: scan.cache_from_scan_id }); return;
+  }
   if (!tasks.length) {
     const input = objectValue(scan.payload);
     const brand = textValue(input.brand, 100); const product = textValue(input.product, 220);
-    await addTask(scan, "discovery", "discovery:1", { params: { engine: "google", q: `${brand} ${product} competitors alternatives India` } });
-    await addTask(scan, "discovery", "discovery:2", { params: { engine: "google", q: `${product} brands similar to ${brand} India` } });
+    await ensureTask("discovery", "discovery:1", { params: { engine: "google", q: `${brand} ${product} competitors alternatives India` } });
+    await ensureTask("discovery", "discovery:2", { params: { engine: "google", q: `${product} brands similar to ${brand} India` } });
     return;
   }
   // Only a confirmed temporary provider failure can lead to a separately budgeted web fallback.
   // Budget/credential/uncertain-outcome failures never trigger another provider's spending.
   for (const task of tasks.filter(t => t.status === "failed" && t.error_code === "provider_unavailable" && ["discovery", "verify", "products"].includes(t.kind)).slice(0, 2)) {
-    if (!tasks.some(t => t.dedupe_key === `fallback:${task.id}`)) await addTask(scan, "fallback", `fallback:${task.id}`, { source_task_id: task.id, source_kind: task.kind, ...task.payload }, [task.id]);
+    if (!tasks.some(t => t.dedupe_key === `fallback:${task.id}`)) await ensureTask("fallback", `fallback:${task.id}`, { source_task_id: task.id, source_kind: task.kind, ...task.payload }, [task.id]);
   }
   tasks = await tasksFor(scan);
   const discovery = tasks.filter(t => t.kind === "discovery" || t.kind === "fallback" && t.payload.source_kind === "discovery");
   if (!discovery.length || discovery.some(t => !terminalTask(t.status))) { await setStage(scan, "discovery"); return; }
   const extract = tasks.find(t => t.kind === "extract");
-  if (!extract) { await addTask(scan, "extract", "extract", {}, discovery.map(t => t.id)); await setStage(scan, "verification"); return; }
+  if (!extract) { await ensureTask("extract", "extract", {}, discovery.map(t => t.id)); await setStage(scan, "verification"); return; }
   if (!terminalTask(extract.status)) return;
   const candidates = (Array.isArray(extract.result.candidates) ? extract.result.candidates : []) as CandidateInput[];
-  for (const candidate of candidates.slice(0, 5)) await addTask(scan, "verify", `verify:${candidate.official_domain}`, { candidate, params: { engine: "google", q: `"${candidate.name}" official website Instagram India` } }, [extract.id]);
+  for (const candidate of candidates.slice(0, 5)) await ensureTask("verify", `verify:${candidate.official_domain}`, { candidate, params: { engine: "google", q: `"${candidate.name}" official website Instagram India` } }, [extract.id]);
   tasks = await tasksFor(scan);
   const verification = tasks.filter(t => t.kind === "verify" || t.kind === "fallback" && t.payload.source_kind === "verify");
   if (verification.some(t => !terminalTask(t.status))) { await setStage(scan, "verification"); return; }
@@ -73,21 +80,21 @@ async function advance(scan: ResearchScan) {
     const handle = response?.hits.filter(hit => nameInText(competitor.name, `${hit.title} ${hit.snippet}`)).map(hit => instagramUsernameFromUrl(hit.url)).find(Boolean) ?? null;
     const base = { competitor_id: competitor.id };
     const dependencies = verificationTask ? [verificationTask.id] : [];
-    await addTask(scan, "meta_ads", `meta:${competitor.id}`, { ...base, params: { engine: "meta_ad_library", q: competitor.name, country: "IN" } }, dependencies);
-    await addTask(scan, "google_ads", `google:${competitor.id}`, { ...base, params: { engine: "google_ads_transparency_center", domain: competitor.official_domain, time_period: "last_30_days" } }, dependencies);
-    await addTask(scan, "products", `products:${competitor.id}`, { ...base, params: { engine: "google", q: `site:${competitor.official_domain} ${textValue(scan.payload.product, 180)} product price India` } }, dependencies);
-    await addTask(scan, "instagram_profile", `profile:${competitor.id}`, { ...base, params: handle ? { engine: "instagram_profile", username: handle } : {}, unavailable_reason: handle ? null : "profile_not_found" }, dependencies, handle ? "queued" : "skipped");
+    await ensureTask("meta_ads", `meta:${competitor.id}`, { ...base, params: { engine: "meta_ad_library", q: competitor.name, country: "IN" } }, dependencies);
+    await ensureTask("google_ads", `google:${competitor.id}`, { ...base, params: { engine: "google_ads_transparency_center", domain: competitor.official_domain, time_period: "last_30_days" } }, dependencies);
+    await ensureTask("products", `products:${competitor.id}`, { ...base, params: { engine: "google", q: `site:${competitor.official_domain} ${textValue(scan.payload.product, 180)} product price India` } }, dependencies);
+    await ensureTask("instagram_profile", `profile:${competitor.id}`, { ...base, params: handle ? { engine: "instagram_profile", username: handle } : {}, unavailable_reason: handle ? null : "profile_not_found" }, dependencies, handle ? "queued" : "skipped");
   }
   tasks = await tasksFor(scan);
   for (const profile of tasks.filter(t => t.kind === "instagram_profile" && terminalTask(t.status))) {
     const postId = profile.status === "succeeded" ? textValue(profile.result.post_id, 100) : "";
-    await addTask(scan, "instagram_comments", `comments:${profile.payload.competitor_id}`, { competitor_id: profile.payload.competitor_id, params: postId ? { engine: "instagram_comments", post_id: postId } : {}, unavailable_reason: postId ? null : "comments_not_available" }, [profile.id], postId ? "queued" : "skipped");
+    await ensureTask("instagram_comments", `comments:${profile.payload.competitor_id}`, { competitor_id: profile.payload.competitor_id, params: postId ? { engine: "instagram_comments", post_id: postId } : {}, unavailable_reason: postId ? null : "comments_not_available" }, [profile.id], postId ? "queued" : "skipped");
   }
   tasks = await tasksFor(scan);
   const evidence = tasks.filter(t => ["meta_ads", "google_ads", "products", "instagram_profile", "instagram_comments"].includes(t.kind) || t.kind === "fallback" && t.payload.source_kind === "products");
   if (evidence.some(t => !terminalTask(t.status))) { await setStage(scan, "evidence"); return; }
   const summary = tasks.find(t => t.kind === "summarize");
-  if (!summary) { await addTask(scan, "summarize", "summarize", {}, tasks.map(t => t.id)); await setStage(scan, "report"); return; }
+  if (!summary) { await ensureTask("summarize", "summarize", {}, tasks.map(t => t.id)); await setStage(scan, "report"); return; }
   if (!terminalTask(summary.status)) return;
   const latestCompetitors = await competitorsFor(scan);
   const partial = tasks.some(t => ["failed", "skipped", "uncertain"].includes(t.status)) || latestCompetitors.some(c => c.research_status !== "complete");
@@ -158,11 +165,22 @@ async function checkpoint(task: ResearchTask, result: Record<string, unknown>) {
   task.result = { ...task.result, ...result };
 }
 async function reserve(task: ResearchTask, provider: "searchapi" | "openai", cost = 0, input = 0, output = 0) {
-  const result = objectValue(await checked(db().rpc("reserve_research_attempt", { task_id: task.id, lease: task.lease_token, provider, estimated_usd: cost, input_tokens: input, output_tokens: output })));
+  const request = () => checked(db().rpc("reserve_research_attempt", { task_id: task.id, lease: task.lease_token, provider, estimated_usd: cost, input_tokens: input, output_tokens: output }));
+  let result = objectValue(await request());
+  // A short pacing pause is not a provider failure. Keep this lease instead of
+  // sending the task back through another scheduler tick. No paid attempt yet.
+  const pacingMs = Math.max(1, Number(result.retry_after) || 1) * 1000;
+  if (!result.allowed && result.error === "provider_pacing" && pacingMs <= 3000) {
+    await new Promise(resolve => setTimeout(resolve, pacingMs));
+    result = objectValue(await request());
+  }
   if (!result.allowed || typeof result.attempt_id !== "string") {
     const code = textValue(result.error) || "research_budget_blocked";
     const retry = ["provider_concurrency", "provider_pacing", "provider_rate_limited", "provider_account_stale", "provider_hourly_limit"].includes(code);
-    await finishTask(task, retry ? "queued" : "failed", {}, code, retry ? new Date(Date.now() + Math.max(2, Number(result.retry_after) || 60) * 1000).toISOString() : null);
+    // A full two-call slot normally frees in seconds; preserve actual provider
+    // rate-limit/backoff durations for all other denials.
+    const retrySeconds = code === "provider_concurrency" ? 2 : Math.max(2, Number(result.retry_after) || 60);
+    await finishTask(task, retry ? "queued" : "failed", {}, code, retry ? new Date(Date.now() + retrySeconds * 1000).toISOString() : null);
     return null;
   }
   task.attempt_count += 1;
@@ -288,6 +306,8 @@ async function runTask(task: ResearchTask) {
   if (task.kind === "clone") await cloneTask(scan, task);
   else if (["extract", "summarize", "fallback"].includes(task.kind)) await aiTask(scan, task);
   else await searchTask(scan, task);
+  // Publish the completed report immediately, even if this invocation's drain budget is spent.
+  if (task.kind === "summarize") await advance(scan);
 }
 
 /** One short invocation drains independent tasks. PostgreSQL owns cross-worker pacing and all caps. */
@@ -313,7 +333,11 @@ export async function runResearchWorker() {
   let processed = 0;
   while (Date.now() - start < 25000) {
     const scans = await checked(db().from("brand_competitor_scans").select("*").eq("provider_key", "searchapi").in("status", ["queued", "running"]).order("created_at").limit(30)) as ResearchScan[];
-    for (const scan of scans) await advance(scan);
+    for (const scan of scans) {
+      if (Date.now() - start >= 25000) break;
+      await advance(scan);
+    }
+    if (Date.now() - start >= 25000) break;
     const tasks: ResearchTask[] = [];
     for (let i = 0; i < 2; i++) {
       const data = await checked(db().rpc("claim_research_task", { worker_id: workerId }));

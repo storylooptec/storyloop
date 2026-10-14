@@ -82,6 +82,7 @@ class Query {
     const table = this.scenario.tables[this.table];
     assert.ok(table, `Unexpected table ${this.table}`);
     if (this.mode === "upsert") {
+      if (this.table === "brand_research_tasks") this.scenario.taskWrites += this.values.length;
       for (const value of this.values) {
         const keys = (this.options.onConflict ?? "id").split(",");
         const existing = table.find((row) => keys.every((key) => row[key] === value[key]));
@@ -100,7 +101,7 @@ class Query {
 function scenario(mode = "success") {
   const context = {
     tables: { brand_research_control: [{ id: true, enabled: true, account_checked_at: instant() }], brand_competitor_scans: [scan(1)], brand_research_tasks: [], brand_competitors: [], brand_competitor_observations: [], brand_research_cache: [], brand_campaigns: [{ id: id(101), company_id: id(90), status: "scanning" }] },
-    searches: [], aiCalls: [], attempts: [], accounts: 0,
+    searches: [], aiCalls: [], attempts: [], accounts: 0, taskWrites: 0,
     account: async () => { context.accounts += 1; return { hourlyRemaining: 1000 }; },
     search: async (params) => {
       context.searches.push(clone(params));
@@ -176,6 +177,7 @@ test("whole research DAG produces five grounded summaries, rejects unrelated ads
     assert.equal(context.searches.length, 32);
     assert.deepEqual(context.aiCalls, ["candidates", "summary"]);
     assert.equal(context.tables.brand_research_tasks.every((task) => terminal(task.status)), true);
+    assert.equal(context.taskWrites, context.tables.brand_research_tasks.length, "advancing a scan must not repeatedly write existing tasks");
     const originals = context.tables.brand_competitors.filter((row) => row.scan_id === original.id);
     for (const competitor of originals) {
       assert.equal(competitor.research_status, "complete");
@@ -213,6 +215,47 @@ test("whole research DAG produces five grounded summaries, rejects unrelated ads
   });
 });
 
+test("brief pacing pause keeps the task lease and reserves only one paid attempt", async () => {
+  const context = scenario();
+  const rpc = context.db.rpc;
+  let denied = false;
+  const queued = [];
+  context.db.rpc = async (name, args) => {
+    if (name === "reserve_research_attempt" && !denied) {
+      denied = true;
+      return { data: { allowed: false, error: "provider_pacing", retry_after: 1 }, error: null };
+    }
+    if (name === "finish_research_task" && args.task_status === "queued") queued.push(args);
+    return rpc(name, args);
+  };
+  await using(context, async () => {
+    await runResearchWorker();
+    assert.equal(context.tables.brand_competitor_scans[0].status, "succeeded");
+    assert.equal(context.searches.length, 32);
+    assert.equal(queued.length, 0, "one-second pacing must not wait for a scheduler tick");
+  });
+});
+
+test("busy concurrency slot rechecks in seconds without weakening provider rate-limit backoff", async () => {
+  for (const code of ["provider_concurrency", "provider_rate_limited"]) {
+    const context = scenario();
+    const rpc = context.db.rpc;
+    let denied = false;
+    let delay;
+    context.db.rpc = async (name, args) => {
+      if (name === "reserve_research_attempt" && !denied) {
+        denied = true;
+        return { data: { allowed: false, error: code, retry_after: 60 }, error: null };
+      }
+      if (name === "finish_research_task" && args.task_status === "queued") delay = Date.parse(args.retry_at) - Date.now();
+      return rpc(name, args);
+    };
+    await using(context, async () => { await runResearchWorker(); });
+    assert.ok(delay >= (code === "provider_concurrency" ? 1900 : 59000));
+    assert.ok(delay <= (code === "provider_concurrency" ? 2100 : 61000));
+  }
+});
+
 test("budget denial ends paid work without triggering cross-provider fallback", async () => {
   const context = scenario("budget");
   await using(context, async () => {
@@ -223,6 +266,24 @@ test("budget denial ends paid work without triggering cross-provider fallback", 
     assert.equal(context.tables.brand_research_tasks.some((task) => task.kind === "fallback"), false);
     assert.equal(context.tables.brand_research_tasks.filter((task) => task.kind === "discovery" && task.status === "failed").length, 2);
   });
+});
+
+test("finishing a summary publishes completion even when the drain window has elapsed", async () => {
+  const context = scenario();
+  const originalAi = context.ai;
+  const originalNow = Date.now;
+  context.ai = async prepared => {
+    const response = await originalAi(prepared);
+    if (prepared.kind === "summary") Date.now = () => originalNow() + 26000;
+    return response;
+  };
+  try {
+    await using(context, async () => {
+      await runResearchWorker();
+      assert.equal(context.tables.brand_competitor_scans[0].status, "succeeded");
+      assert.equal(context.tables.brand_competitor_scans[0].stage, "complete");
+    });
+  } finally { Date.now = originalNow; }
 });
 
 test("uncertain provider outcomes stay terminal with no automatic retry or fallback spend", async () => {

@@ -12,8 +12,8 @@ begin
   delete from public.brand_research_cache where expires_at<now()-interval '1 day';
   if not exists(select 1 from public.brand_competitor_scans where provider_key='searchapi' and status in ('queued','running')) then return; end if;
   if not exists(select 1 from public.brand_research_control where id and enabled) then return; end if;
-  -- Avoid overlapping dispatches. Paid calls also have a separate database concurrency gate.
-  if exists(select 1 from app_private.research_worker_nonces where created_at>now()-interval '55 seconds') then return; end if;
+  -- Resume ready work promptly. Task leases and the separate two-call gate prevent duplicate spending.
+  if exists(select 1 from app_private.research_worker_nonces where created_at>now()-interval '14 seconds') then return; end if;
   capability:=replace(gen_random_uuid()::text||gen_random_uuid()::text,'-','');
   insert into app_private.research_worker_nonces(nonce_hash,expires_at)
     values(encode(sha256(convert_to(capability,'UTF8')),'hex'),now()+interval '2 minutes');
@@ -25,4 +25,4 @@ begin
   );
 end; $$;
 revoke all on function app_private.dispatch_competition_research() from public,anon,authenticated,service_role;
-select cron.schedule('storyloop-competition-research','* * * * *','select app_private.dispatch_competition_research();');
+select cron.schedule('storyloop-competition-research','15 seconds','select app_private.dispatch_competition_research();');

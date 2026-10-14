@@ -77,6 +77,12 @@ before(async () => {
     grant execute on function auth.uid(),auth.jwt() to authenticated,anon,service_role;
     alter default privileges in schema public grant all on tables to service_role;
     alter default privileges in schema public grant all on sequences to service_role;`);
+  // Validate scheduler SQL locally with a network sink; no HTTP request is made.
+  await db.exec(`create schema net; create schema cron;
+    create table net.test_requests(url text,headers jsonb);
+    create function net.http_post(url text,body jsonb default '{}',params jsonb default '{}',headers jsonb default '{}',timeout_milliseconds integer default 2000) returns bigint language plpgsql as $$ begin insert into net.test_requests values(url,headers); return 1; end; $$;
+    create table cron.test_jobs(name text primary key,schedule text);
+    create function cron.schedule(text,text,text) returns bigint language plpgsql as $$ begin insert into cron.test_jobs values($1,$2) on conflict(name) do update set schedule=excluded.schedule; return 1; end; $$;`);
   const files = readdirSync(root + "supabase/migrations").filter((name) => name.endsWith(".sql")).sort();
   // Preserve the historical applied dependency order; the original audit hardening timestamp predates its table.
   const hardening = files.splice(files.indexOf("20260923174500_harden_audit_log_privileges.sql"), 1)[0];
@@ -85,11 +91,6 @@ before(async () => {
     const sql = readFileSync(root + "supabase/migrations/" + file, "utf8").replace("create extension if not exists pgcrypto;", "");
     try { await db.exec(sql); } catch (error) { throw new Error(`Migration ${file}: ${error.message}`, { cause: error }); }
   }
-  // Validate scheduler SQL locally with a network sink; no HTTP request is made.
-  await db.exec(`create schema net; create schema cron;
-    create table net.test_requests(url text,headers jsonb);
-    create function net.http_post(url text,body jsonb default '{}',params jsonb default '{}',headers jsonb default '{}',timeout_milliseconds integer default 2000) returns bigint language plpgsql as $$ begin insert into net.test_requests values(url,headers); return 1; end; $$;
-    create function cron.schedule(text,text,text) returns bigint language sql as $$ select 1::bigint $$;`);
   await db.exec(readFileSync(root+'supabase/setup/competition-scheduler.sql','utf8').replace(/create extension if not exists pg_(?:cron|net);/g,''));
   for (const user of [id.userA, id.userB, id.operator, id.creatorUser]) await q("insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())", [user, `${user}@example.test`]);
   storyloopId = (await one("select id from companies where slug='storyloop'")).id;
@@ -406,6 +407,7 @@ scenario('research OpenAI budgets, nonce replay protection, and tenant isolation
 });
 
 scenario('research scheduler is idle without scans and issues a single-use capability only for active campaigns',async()=>{
+  assert.equal((await one("select schedule from cron.test_jobs where name='storyloop-competition-research'")).schedule,'15 seconds');
   await q('select app_private.dispatch_competition_research()');
   assert.equal((await one('select count(*)::int as n from net.test_requests')).n,0);
   await role('service_role'); const scan=(await enqueueResearch()).scan_id;
@@ -414,6 +416,9 @@ scenario('research scheduler is idle without scans and issues a single-use capab
   assert.match(request.headers.Authorization,/^Bearer [0-9a-f]{64}$/);
   await q('select app_private.dispatch_competition_research()');
   assert.equal((await one('select count(*)::int as n from net.test_requests')).n,1);
+  await q("update app_private.research_worker_nonces set created_at=now()-interval '15 seconds'");
+  await q('select app_private.dispatch_competition_research()');
+  assert.equal((await one('select count(*)::int as n from net.test_requests')).n,2,'Ready work can resume on the next 15-second tick');
   await q("update brand_competitor_scans set deadline_at=now()-interval '1 second' where id=$1",[scan]);
   await q('select app_private.dispatch_competition_research()');
   assert.equal((await one('select status from brand_competitor_scans where id=$1',[scan])).status,'failed');
