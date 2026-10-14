@@ -13,7 +13,15 @@ const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','
 const origin='http://127.0.0.1:3004';page.setDefaultTimeout(10000);page.setDefaultNavigationTimeout(30000);
 const errors=[];page.on('pageerror',error=>errors.push(error.message));
 await page.goto(origin+'/admin');await page.waitForURL('**/admin/home');
-assert.deepEqual(await page.locator('nav[aria-label="Admin navigation"] > div > a:first-child').allTextContents(),['Home','Creators','Brands & enquiries','Campaigns','Settings']);
+assert.deepEqual(await page.locator('nav[aria-label="Admin navigation"] > div > button').evaluateAll(buttons=>buttons.map(button=>button.querySelector('span').textContent)),['Home','Creators','Brands & enquiries','Campaigns','Settings']);
+const nav=page.getByRole('navigation',{name:'Admin navigation'});
+await nav.getByRole('button',{name:'Settings',exact:true}).click();
+assert.equal(await nav.getByRole('link',{name:'Company',exact:true}).isVisible(),true);
+assert.equal(await nav.getByRole('link',{name:'Overview & alerts',exact:true}).isVisible(),false);
+await nav.getByRole('button',{name:'Settings',exact:true}).press('Enter');
+assert.equal(await nav.getByRole('link',{name:'Company',exact:true}).isVisible(),false);
+await nav.getByRole('button',{name:'Home',exact:true}).press('Space');
+assert.equal(await nav.getByRole('link',{name:'Overview & alerts',exact:true}).isVisible(),true);
 assert.equal(await page.getByPlaceholder('Global search — not connected yet').count(),0);
 await page.screenshot({path:out+'/home-desktop.png',fullPage:true});
 for(const route of ['overview','today']){await page.goto(origin+'/admin/'+route);await page.waitForURL('**/admin/home');}
@@ -22,10 +30,10 @@ await page.goto(origin+'/admin/settings');await page.getByRole('heading',{name:'
 const hrefs=await page.locator('main a').evaluateAll(links=>links.map(a=>a.getAttribute('href')));assert.equal(hrefs.length,10);
 for(const href of hrefs){await page.goto(origin+href);assert.equal(await page.locator('main h1').count(),1,href);await page.getByRole('link',{name:'← Settings',exact:true}).waitFor();}
 await page.goto(origin+'/admin/brands');assert.equal(await page.getByText('Northstar Skincare').count(),0);await page.getByText('Admin brand management is not connected yet').waitFor();
-await page.goto(origin+'/admin/campaigns');await page.getByRole('link',{name:'Open campaign measurements'}).click();await page.getByRole('heading',{name:'Campaign metrics',exact:true}).waitFor();await page.getByRole('link',{name:'← Campaigns',exact:true}).waitFor();assert.equal(await page.locator('nav[aria-label="Admin navigation"] a[aria-current="page"]').innerText(),'Campaigns');
+await page.goto(origin+'/admin/campaigns');await page.getByRole('link',{name:'Open campaign measurements'}).click();await page.getByRole('heading',{name:'Campaign metrics',exact:true}).waitFor();await page.getByRole('link',{name:'← Campaigns',exact:true}).waitFor();assert.equal(await page.locator('nav[aria-label="Admin navigation"] a[aria-current="page"]').innerText(),'Campaign measurements');
 await page.goto(origin+'/admin/money');await page.getByText('Financial records are not connected').waitFor();assert.equal(await page.getByText('₹6,20,000').count(),0);
 failCounts=true;await page.goto(origin+'/admin/home');await page.getByRole('alert').filter({hasText:'could not be loaded'}).waitFor();assert.equal(await page.getByText('Unavailable',{exact:true}).count(),1);failCounts=false;
-for(const width of [390,800,860]){await page.setViewportSize({width,height:844});await page.goto(origin+'/admin/home');assert.equal(await page.locator('.admin-sidebar').isVisible(),true);await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('navigation',{name:'Admin navigation'}).getByRole('link',{name:'Discover',exact:true}).click();await page.waitForURL('**/admin/discover');assert.equal(await page.getByRole('button',{name:'Menu',exact:true}).getAttribute('aria-expanded'),'false');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2),false);if(width===390)await page.screenshot({path:out+'/discover-mobile.png',fullPage:true});}
+for(const width of [390,800,860]){await page.setViewportSize({width,height:844});await page.goto(origin+'/admin/home');assert.equal(await page.locator('.admin-sidebar').isVisible(),true);await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('navigation',{name:'Admin navigation'}).getByRole('button',{name:'Creators',exact:true}).click();await page.getByRole('navigation',{name:'Admin navigation'}).getByRole('link',{name:'Discover',exact:true}).click();await page.waitForURL('**/admin/discover');assert.equal(await page.getByRole('button',{name:'Menu',exact:true}).getAttribute('aria-expanded'),'false');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2),false);if(width===390)await page.screenshot({path:out+'/discover-mobile.png',fullPage:true});}
 await page.setViewportSize({width:1440,height:1000});role='junior';await page.goto(origin+'/admin/settings/brand');assert.equal(await page.getByRole('button',{name:'Save brand settings',exact:true}).count(),0);await page.getByText('Junior access is read-only.',{exact:false}).waitFor();
 await page.goto(origin+'/admin/discover');await page.getByRole('heading',{name:'Discover',exact:true}).waitFor();
 await page.goto(origin+'/admin/home');await page.getByRole('link',{name:'Help',exact:true}).click();await page.getByRole('heading',{name:'Welcome to Storyloop Admin'}).waitFor();await page.getByRole('checkbox').uncheck();await page.getByRole('button',{name:'Start using Admin'}).click();await page.waitForURL('**/admin/home');assert.equal(await page.getByRole('heading',{name:'Welcome to Storyloop Admin'}).count(),0);
