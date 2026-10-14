@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 
 import { requireAdminContext } from "@/auth/admin-context";
+import { AdminLocation } from "@/components/admin/admin-location";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminOnboarding } from "@/components/admin/admin-onboarding";
 import { ContextHelp } from "@/components/admin/context-help";
@@ -41,16 +42,11 @@ export async function AdminShell({ children }: { children: ReactNode }) {
       <div className="admin-main">
         <header className="admin-topbar">
           <div className="admin-topbar-primary">
-            <Link href="/admin/add" className="primary-button admin-add" data-tour="add">+ Add</Link>
-            <label className="admin-global-search" data-tour="search">
-              <span className="sr-only">Global search</span>
-              <input disabled placeholder="Global search — not connected yet" aria-describedby="global-search-status" />
-              <span id="global-search-status" className="admin-search-status">Reserved</span>
-            </label>
+            <AdminLocation />
           </div>
 
           <div className="admin-topbar-account">
-            <Link href="/admin/overview?welcome=1" className="admin-help-link">Help</Link>
+            <Link href="/admin/home?welcome=1" className="admin-help-link">Help</Link>
             <span className="admin-role-context" data-tour="help">
               <span className="sl-system-label">{context.role}</span>
               <ContextHelp
