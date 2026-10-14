@@ -30,7 +30,7 @@ export async function requireAdminContext(): Promise<AdminContext> {
     .maybeSingle();
 
   if (error || !membership) {
-    redirect("/admin/unauthorized");
+    redirect("/admin/login");
   }
 
   return {
