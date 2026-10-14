@@ -7,7 +7,7 @@ import styles from "../../../brand.module.css";
 import { ResearchPanel, type ResearchSnapshot, type ResearchScan } from "./research-panel";
 import { SearchApiTestPanel } from "./searchapi-test-panel";
 
-type Props = { params: Promise<{ campaignId: string }>; searchParams: Promise<{ cached?: string; error?: string; saved?: string; created?: string; scan?: string }> };
+type Props = { params: Promise<{ campaignId: string }>; searchParams: Promise<{ cached?: string; rechecked?: string; error?: string; saved?: string; created?: string; scan?: string }> };
 const when = (value: string) => new Date(value).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 function errorMessage(code?: string) {
@@ -55,6 +55,7 @@ export default async function CompetitorScanPage({ params, searchParams }: Props
     <SearchApiTestPanel />
     {alert ? <p className={styles.error} role="alert">{alert}</p> : null}
     {query.cached ? <p className={styles.evidenceNote} role="status">Using saved research from the last 24 hours. This action sent no new search request.</p> : null}
+    {query.rechecked ? <p className={styles.evidenceNote} role="status">Saved responses rechecked. No new SearchAPI or OpenAI requests were sent. Missing evidence still needs a fresh search.</p> : null}
     {query.saved ? <p className={styles.evidenceNote} role="status">Shortlist updated.</p> : null}
     <ResearchPanel key={`${scan?.id ?? "new"}:${query.error ?? ""}`} campaign={campaign} initial={initial} readOnly={readOnly} activeScanId={activeScan?.id ?? null} />
     {(scans?.length ?? 0) > 1 ? <details style={{ marginTop: 20 }}>

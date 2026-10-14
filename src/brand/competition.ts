@@ -136,8 +136,39 @@ export function verifiedOfficialHit(candidate: Pick<CandidateInput, "name" | "of
   if (isSourceOnlyDomain(candidate.official_domain)) return null;
   return hits.find((hit) => {
     const domain = domainOf(hit.url);
-    return domain && isDomainWithin(domain, candidate.official_domain) && nameInText(candidate.name, hit.title + " " + hit.snippet);
+    return domain && brandOwnsUrl(candidate, hit.url) && nameInText(candidate.name, hit.title + " " + hit.snippet);
   }) ?? null;
+}
+
+// Reviewed ownership relationships, not competitor suggestions. Candidates must
+// still be grounded in discovery evidence. Parent websites are path-scoped.
+// Sources checked 2026-10-14:
+// https://www.colgatepalmolive.co.in/brands (links to colgate.com)
+// https://www.hul.co.in/brands/personal-care/pepsodent/
+const BRAND_SITES = [
+  { name: "colgate", domains: ["colgatepalmolive.co.in", "colgate.com"], sites: ["https://www.colgate.com/", "https://www.colgatepalmolive.co.in/"] },
+  { name: "pepsodent", domains: ["pepsodent.in", "pepsodent.com"], sites: ["https://www.hul.co.in/brands/personal-care/pepsodent/"] },
+];
+
+export function brandOwnsUrl(candidate: Pick<CandidateInput, "name" | "official_domain">, value: unknown): boolean {
+  const safe = publicSourceUrl(value);
+  if (!safe || isSourceOnlyDomain(candidate.official_domain)) return false;
+  const url = new URL(safe);
+  const domain = domainOf(safe)!;
+  if (isDomainWithin(domain, candidate.official_domain)) return true;
+  const known = BRAND_SITES.find(item => item.name === normalizedName(candidate.name) && item.domains.includes(candidate.official_domain));
+  return !!known?.sites.some(site => {
+    const target = new URL(site);
+    return isDomainWithin(domain, domainOf(site)!) && (target.pathname === "/" || url.pathname.replace(/\/$/, "") === target.pathname.replace(/\/$/, "") || url.pathname.startsWith(target.pathname));
+  });
+}
+
+export function competitorWebsite(candidate: Pick<CandidateInput, "name" | "official_domain">): string {
+  return BRAND_SITES.find(item => item.name === normalizedName(candidate.name) && item.domains.includes(candidate.official_domain))?.sites[0] ?? `https://${candidate.official_domain}/`;
+}
+
+export function verificationQuery(candidate: Pick<CandidateInput, "name" | "official_domain">): string {
+  return `"${candidate.name.replace(/["\\]/g, " ")}" official website India -site:instagram.com -site:facebook.com`;
 }
 export function compareObservations(current: { source_record_key: string; content_hash: string }[], previous: { source_record_key: string; content_hash: string }[]) {
   const prior = new Map(previous.map((item) => [item.source_record_key, item.content_hash]));

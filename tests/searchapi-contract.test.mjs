@@ -111,6 +111,12 @@ test("rate limits expose safe retry seconds and never retry or echo provider bod
   assert.equal(calls, 1);
 });
 
+test("HTTP-200 provider errors retain a safe search ID for billing reconciliation", async () => {
+  await withFetch(async () => Response.json({ search_metadata: { id: "search_billed123", status: "Error" }, error: "private error details" }), async () => {
+    await assert.rejects(callSearchApi({ engine: "google", q: "Brand" }, "test-secret"), error => error.code === "provider_search_failed" && error.requestId === "search_billed123" && error.uncertain && !String(error).includes("private"));
+  });
+});
+
 test("unknown transport outcome is marked uncertain; malformed and oversized payloads fail closed", async () => {
   await withFetch(async () => { throw new Error("URL carrying private secrets"); }, async () => {
     await assert.rejects(callSearchApi({ engine: "google", q: "Beta" }, "test-secret"), error => error.code === "provider_unavailable" && error.uncertain && !String(error).includes("private"));

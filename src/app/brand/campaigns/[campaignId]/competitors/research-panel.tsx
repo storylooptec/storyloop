@@ -5,7 +5,7 @@ import { useActionState, useEffect, useId, useRef, useState, type KeyboardEvent 
 import type { Tables } from "@/types/database.types";
 import brand from "../../../brand.module.css";
 import styles from "./research.module.css";
-import { runCompetitorScanAction, saveCompetitorSelectionAction } from "./actions";
+import { recoverCompetitorResultsAction, runCompetitorScanAction, saveCompetitorSelectionAction } from "./actions";
 import { ResearchButton } from "./submit-button";
 
 export type ResearchScan = Tables<"brand_competitor_scans"> & { stage?: string; deadline_at?: string | null; requests_used?: number; cache_hits?: number };
@@ -75,6 +75,7 @@ export function ResearchPanel({ campaign, initial, readOnly, activeScanId }: { c
   const [selected, setSelected] = useState(() => new Set(initial.competitors.filter((item) => item.status === "confirmed").map((item) => item.id)));
   const [drawer, setDrawer] = useState<{ competitorId: string; tab: Tab } | null>(null);
   const [, startScan, starting] = useActionState(async (_: null, form: FormData) => { await runCompetitorScanAction(form); return null; }, null);
+  const [, recover, recovering] = useActionState(async (_: null, form: FormData) => { await recoverCompetitorResultsAction(form); return null; }, null);
   const { scan, competitors, observations, tasks } = snapshot;
   const scanId = scan?.id;
   const running = !!scan && ["queued", "running"].includes(scan.status);
@@ -148,13 +149,17 @@ export function ResearchPanel({ campaign, initial, readOnly, activeScanId }: { c
     <section className={brand.homeGrid}>
       <article className={brand.panel}><p className={brand.eyebrow}>{campaign.title}</p><h2 className={styles.campaignName}>{campaign.promoted_item}</h2><p className={brand.muted}>{campaign.objective.replaceAll("_", " ")} · {campaign.deliverables.map((item) => item.replaceAll("_", " ")).join(", ")}</p><p className={brand.muted}>India · Up to 5 verified brands · Reuse fresh research for 24 hours</p></article>
       <article className={brand.panel}><p className={brand.eyebrow}>Build your shortlist</p><p className={brand.muted}>Find competitors and collect public campaign, product and audience evidence. Three fresh scans per workspace per day.</p>
-        <form action={startScan}><input type="hidden" name="campaign_id" value={campaign.id} /><button className={`${brand.primaryButton} ${styles.scanButton}`} type="submit" disabled={starting || running || !!otherActive || readOnly} aria-busy={starting || running}>{starting ? "Queuing research…" : running || otherActive ? "Scan in progress…" : scan ? "Refresh competitor scan" : "Scan competition"}</button></form>
+        <p className={brand.muted}>Fresh scan: maximum 32 SearchAPI requests, including retries. Saved searches are reused for 24 hours. Further paid research stops if fewer than 3 brands are verified. AI analysis is billed separately.</p>
+        <form action={startScan}><input type="hidden" name="campaign_id" value={campaign.id} /><button className={`${brand.primaryButton} ${styles.scanButton}`} type="submit" disabled={starting || recovering || running || !!otherActive || readOnly} aria-busy={starting || running}>{starting ? "Queuing research…" : running || otherActive ? "Scan in progress…" : scan ? "Refresh competitor scan" : "Scan competition"}</button></form>
+        {scan && !running && !readOnly ? <form action={recover}><input type="hidden" name="campaign_id" value={campaign.id} /><input type="hidden" name="scan_id" value={scan.id} /><button className={brand.textButton} disabled={recovering || starting} type="submit">{recovering ? "Rechecking saved results…" : "Recheck saved results · No new searches"}</button></form> : null}
         {otherActive ? <Link className={styles.inlineLink} href={`/brand/campaigns/${campaign.id}/competitors?scan=${activeScanId}`}>View active research →</Link> : null}
       </article>
     </section>
     {readOnly ? <p className={brand.evidenceNote}>Campaign launched · Research history is read-only.</p> : null}
     <section className={styles.researchArea} aria-label="Competitor research">
       <div className={styles.researchContext}><strong>{campaign.brand_name} — {campaign.promoted_item}</strong><span>India · {campaign.objective.replaceAll("_", " ")}</span></div>
+      {scan ? <p className={styles.coverage} aria-live="polite">SearchAPI requests attempted: {scan.requests_used ?? 0} / 32 · Saved responses reused: {scan.cache_hits ?? 0} · Sources saved: {observations.length}</p> : null}
+      {scan?.error_code === "insufficient_verified_competitors" ? <p className={styles.notice} role="status">Paid research stopped because fewer than 3 competitors could be verified. Your saved evidence is available below. Check the brand and product details before starting fresh research.</p> : null}
       {starting || running ? <div className={styles.progress}>
         <div className={styles.sectionHeading}><div className={styles.progressHeading}><span className={styles.spinner} aria-hidden="true" /><div><h2>{starting ? "Queuing your research" : scan?.status === "queued" ? "Your scan is queued" : progressStage === "verification" ? "Checking competitor identities" : progressStage === "evidence" ? "Collecting competitor evidence" : progressStage === "report" ? "Preparing your report" : "Finding competitors"}</h2><p>{starting ? "Saving your request so progress can continue in the background." : scan?.status === "queued" ? "Your research will start when a research slot is available." : "Verified sources and findings are saved as research progresses."}</p></div></div><span className={styles.status} role="status">{starting || scan?.status === "queued" ? "Queued" : "In progress"}</span></div>
         <ol className={styles.progressSteps}>{stages.map((stage, index) => { const state = starting ? "Waiting" : stageState(stage, index, progressScan, tasks); return <li key={stage.id} data-state={state}><span className={styles.stepNumber} aria-hidden="true">{state === "Complete" ? "✓" : index + 1}</span><strong>{stage.title}</strong><span>{state}</span></li>; })}</ol>
@@ -206,7 +211,7 @@ function EvidenceDrawer({ competitor, observations, tab, onTab, onClose }: { com
     dialog.current?.querySelector<HTMLButtonElement>(`[data-tab="${tabs[next].id}"]`)?.focus();
   }
   const visible = observations.filter((item) => inTab(item, tab));
-  const website = sourceUrl(`https://${competitor.official_domain}`);
+  const website = sourceUrl(observations.find(item => item.evidence_kind === "official_site")?.source_url ?? `https://${competitor.official_domain}`);
   return <dialog className={styles.drawer} ref={dialog} aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); onClose(); }} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <div className={styles.drawerBody}>
       <header className={styles.drawerHeader}><div><p className={brand.eyebrow}>Saved competitor evidence</p><h2 id={titleId}>{competitor.name}</h2>{website ? <a href={website} target="_blank" rel="noopener noreferrer">{competitor.official_domain} ↗</a> : <span>{competitor.official_domain}</span>}</div><button className={styles.closeButton} type="button" autoFocus aria-label="Close competitor evidence" onClick={onClose}>×</button></header>

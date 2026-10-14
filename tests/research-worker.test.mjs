@@ -28,9 +28,10 @@ const workerSource = (await readFile(new URL("src/lib/research/worker.ts", root)
   .replace(/import \{[^\n]+\} from "@\/lib\/providers\/searchapi";/, 'const { SearchApiError } = globalThis.__storyloopWorkerTest; const callSearchApi = (...args) => globalThis.__storyloopWorkerTest.scenario.search(...args); const fetchSearchApiAccount = () => globalThis.__storyloopWorkerTest.scenario.account();')
   .replace(/import \{[^\n]+\} from "@\/lib\/providers\/research-openai";/, 'const { prepareCandidateRequest, prepareFallbackRequest, prepareSummaryRequest, validateResearchCandidates, validateResearchSummary } = globalThis.__storyloopWorkerTest.ai; const invokeResearchOpenAI = (...args) => globalThis.__storyloopWorkerTest.scenario.ai(...args);')
   .replace('import { ProviderError } from "@/lib/providers/runtime";', 'const { ProviderError } = globalThis.__storyloopWorkerTest;')
+  .replace('import { officialSocialLinks } from "./official-links";', 'const officialSocialLinks = async (url) => { const domain = new URL(url).hostname; const name = domain.split(".")[0]; return ["https://www.instagram.com/parentcorporation/", "https://www.instagram.com/" + name + "care/"]; };')
   .replace('import { researchDb, searchApiKey, researchConfigurationError } from "./db";', 'const researchDb = () => globalThis.__storyloopWorkerTest.scenario.db; const searchApiKey = () => "fixture-key"; const researchConfigurationError = () => null;')
   .replace(/import \{ terminalTask,[^\n]+\} from "\.\/types";/, 'const terminalTask = (status) => ["succeeded", "failed", "skipped", "uncertain"].includes(status);');
-const { runResearchWorker } = await import(compile(workerSource));
+const { runResearchWorker, recoverSavedResearch } = await import(compile(workerSource));
 
 const id = (n) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12, "0")}`;
 const brands = ["Beta", "Gamma", "Delta", "Epsilon", "Zeta"].map((name) => ({ name, domain: `${name.toLowerCase()}.in`, handle: `${name.toLowerCase()}care`, post: `${name}Post` }));
@@ -174,8 +175,9 @@ test("whole research DAG produces five grounded summaries, rejects unrelated ads
     const original = context.tables.brand_competitor_scans[0];
     assert.equal(original.status, "succeeded");
     assert.equal(original.result_count, 5);
-    assert.equal(context.searches.length, 32);
+    assert.equal(context.searches.length, 26);
     assert.deepEqual(context.aiCalls, ["candidates", "summary"]);
+    assert.equal(context.searches.some(params => params.username === "parentcorporation"), false, "Corporate footer accounts are not attributed to the brand");
     assert.equal(context.tables.brand_research_tasks.every((task) => terminal(task.status)), true);
     assert.equal(context.taskWrites, context.tables.brand_research_tasks.length, "advancing a scan must not repeatedly write existing tasks");
     const originals = context.tables.brand_competitors.filter((row) => row.scan_id === original.id);
@@ -190,7 +192,7 @@ test("whole research DAG produces five grounded summaries, rejects unrelated ads
     }
     assert.equal(context.tables.brand_competitor_observations.some((row) => row.source_url.includes("unrelated.example")), false);
     await runResearchWorker();
-    assert.equal(context.searches.length, 32, "reinvoking a completed job must not repeat searches");
+    assert.equal(context.searches.length, 26, "reinvoking a completed job must not repeat searches");
     assert.equal(context.aiCalls.length, 2);
 
     const reused = scan(2, original.id);
@@ -199,7 +201,7 @@ test("whole research DAG produces five grounded summaries, rejects unrelated ads
     await runResearchWorker();
     assert.equal(reused.status, "succeeded");
     assert.equal(reused.cache_hits, 1);
-    assert.equal(context.searches.length, 32, "snapshot reuse must perform zero paid searches");
+    assert.equal(context.searches.length, 26, "snapshot reuse must perform zero paid searches");
     assert.equal(context.aiCalls.length, 2, "snapshot reuse must not regenerate summaries");
     const copied = context.tables.brand_competitors.filter((row) => row.scan_id === reused.id);
     assert.equal(copied.length, 5);
@@ -231,8 +233,75 @@ test("brief pacing pause keeps the task lease and reserves only one paid attempt
   await using(context, async () => {
     await runResearchWorker();
     assert.equal(context.tables.brand_competitor_scans[0].status, "succeeded");
-    assert.equal(context.searches.length, 32);
+    assert.equal(context.searches.length, 26);
     assert.equal(queued.length, 0, "one-second pacing must not wait for a scheduler tick");
+  });
+});
+
+test("weak verification stops before spending on ads, profiles, comments or summarization", async () => {
+  const context = scenario();
+  const original = context.search;
+  context.search = async params => {
+    const response = await original(params);
+    if (params.engine === "google" && !params.q.includes('official website')) response.hits = brands.map(item => hit(item, `https://news.example/${item.name}`));
+    if (params.q?.includes('official website') && !params.q.includes('Beta')) response.hits = [];
+    return response;
+  };
+  await using(context, async () => {
+    await runResearchWorker();
+    assert.equal(context.tables.brand_competitor_scans[0].error_code, "insufficient_verified_competitors");
+    assert.equal(context.tables.brand_competitor_scans[0].result_count, 1);
+    assert.equal(context.searches.length, 6);
+    assert.deepEqual(context.aiCalls, ["candidates"]);
+    assert.equal(context.searches.every(params => params.engine === "google"), true);
+  });
+});
+
+test("a second discovery search runs only when the first extraction is short", async () => {
+  const context = scenario();
+  const original = context.ai;
+  let extraction = 0;
+  context.ai = async prepared => {
+    const response = await original(prepared);
+    if (prepared.kind === "candidates" && ++extraction === 1) response.value.competitors = response.value.competitors.slice(0, 2);
+    return response;
+  };
+  await using(context, async () => {
+    await runResearchWorker();
+    assert.equal(context.tables.brand_competitor_scans[0].result_count, 5);
+    assert.equal(context.tables.brand_research_tasks.filter(t => t.kind === "discovery").length, 2);
+    assert.deepEqual(context.aiCalls, ["candidates", "candidates", "summary"]);
+    assert.equal(context.searches.length, 27);
+  });
+});
+
+test("saved-result repair is idempotent and never invokes a paid transport", async () => {
+  const context = scenario();
+  await using(context, async () => {
+    await runResearchWorker();
+    const requestCount = context.searches.length;
+    const aiCount = context.aiCalls.length;
+    const evidenceCount = context.tables.brand_competitor_observations.length;
+    context.search = context.ai = async () => { throw new Error("Repair must not spend"); };
+    const current = context.tables.brand_competitor_scans[0];
+    await recoverSavedResearch(current);
+    await recoverSavedResearch(current);
+    assert.equal(context.searches.length, requestCount);
+    assert.equal(context.aiCalls.length, aiCount);
+    assert.equal(context.tables.brand_competitor_observations.length, evidenceCount);
+    assert.equal(context.tables.brand_competitors.length, 5);
+  });
+});
+
+test("saved profile repair rejects a different returned username even with an official website", async () => {
+  const context = scenario();
+  await using(context, async () => {
+    await runResearchWorker();
+    const profile = context.tables.brand_research_tasks.find(task => task.kind === "instagram_profile");
+    profile.result.response.instagramUsername = "unrelatedprofile";
+    await recoverSavedResearch(context.tables.brand_competitor_scans[0]);
+    assert.equal(profile.result.profile_verified, false);
+    assert.equal(profile.result.post_id, null);
   });
 });
 
@@ -264,7 +333,7 @@ test("budget denial ends paid work without triggering cross-provider fallback", 
     assert.equal(context.aiCalls.length, 0);
     assert.equal(context.attempts.length, 0);
     assert.equal(context.tables.brand_research_tasks.some((task) => task.kind === "fallback"), false);
-    assert.equal(context.tables.brand_research_tasks.filter((task) => task.kind === "discovery" && task.status === "failed").length, 2);
+    assert.equal(context.tables.brand_research_tasks.filter((task) => task.kind === "discovery" && task.status === "failed").length, 1);
   });
 });
 
@@ -290,11 +359,11 @@ test("uncertain provider outcomes stay terminal with no automatic retry or fallb
   const context = scenario("uncertain");
   await using(context, async () => {
     await runResearchWorker(); await runResearchWorker();
-    assert.equal(context.searches.length, 2);
+    assert.equal(context.searches.length, 1);
     assert.equal(context.aiCalls.length, 0);
-    assert.equal(context.attempts.length, 2);
+    assert.equal(context.attempts.length, 1);
     assert.equal(context.attempts.every((attempt) => attempt.status === "uncertain"), true);
     assert.equal(context.tables.brand_research_tasks.some((task) => task.kind === "fallback"), false);
-    assert.equal(context.tables.brand_research_tasks.filter((task) => task.kind === "discovery" && task.status === "uncertain").length, 2);
+    assert.equal(context.tables.brand_research_tasks.filter((task) => task.kind === "discovery" && task.status === "uncertain").length, 1);
   });
 });

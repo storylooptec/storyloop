@@ -6,6 +6,8 @@ import { requireBrandContext } from "@/brand/context";
 import { contentHash, domainOf, objectValue, textValue } from "@/brand/competition";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { researchDb, researchConfigurationError } from "@/lib/research/db";
+import { recoverSavedResearch } from "@/lib/research/worker";
+import type { ResearchScan } from "@/lib/research/types";
 
 const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function campaignContext(form: FormData) {
@@ -44,11 +46,12 @@ export async function runCompetitorScanAction(form: FormData) {
     const queryHash = contentHash(JSON.stringify(["searchapi-research-v1", brand.toLowerCase(), product.toLowerCase(), ownDomain, "IN", "en"]));
     // Cached research remains usable when providers are paused or credentials change.
     const { data: existing, error: readError } = await db.from("brand_competitor_scans")
-      .select("id,status,completed_at,cache_expires_at").eq("company_id", context.companyId).eq("campaign_id", campaign.id)
+      .select("*").eq("company_id", context.companyId).eq("campaign_id", campaign.id)
       .eq("query_hash", queryHash).in("status", ["queued", "running", "succeeded"])
       .order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (readError) throw new Error("research_unavailable");
     if (existing && (["queued", "running"].includes(existing.status) || existing.cache_expires_at && Date.parse(existing.cache_expires_at) > Date.now())) {
+      if (existing.status === "succeeded") await recoverSavedResearch(existing as ResearchScan);
       state = `scan=${existing.id}&${existing.status === "succeeded" ? "cached" : "queued"}=1`;
     } else {
       const configurationError = researchConfigurationError();
@@ -68,6 +71,21 @@ export async function runCompetitorScanAction(form: FormData) {
     state = `error=${encodeURIComponent(code)}`;
   }
   finish(campaign.id, state);
+}
+
+/** Explicit zero-provider-cost repair; authentication and tenant checks apply. */
+export async function recoverCompetitorResultsAction(form: FormData) {
+  const { context, campaign } = await campaignContext(form);
+  const scanId = String(form.get("scan_id") ?? "");
+  if (!idPattern.test(scanId)) finish(campaign.id, "error=selection_invalid");
+  let failure = false;
+  try {
+    const { data: scan, error } = await researchDb().from("brand_competitor_scans").select("*")
+      .eq("id", scanId).eq("campaign_id", campaign.id).eq("company_id", context.companyId).maybeSingle();
+    if (error || !scan || !["succeeded", "failed"].includes(scan.status)) throw new Error("scan_running");
+    await recoverSavedResearch(scan as ResearchScan);
+  } catch { failure = true; }
+  finish(campaign.id, `scan=${scanId}&${failure ? "error=research_unavailable" : "rechecked=1"}`);
 }
 
 export async function saveCompetitorSelectionAction(form: FormData) {

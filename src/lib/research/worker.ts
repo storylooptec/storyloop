@@ -1,12 +1,13 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { contentHash, domainOf, isDomainWithin, nameInText, objectValue, parsedSourceDate, publicSourceUrl, textValue, verifiedOfficialHit, type CandidateInput, type SearchHit } from "@/brand/competition";
+import { brandOwnsUrl, competitorWebsite, verificationQuery, contentHash, domainOf, nameInText, objectValue, parsedSourceDate, publicSourceUrl, textValue, verifiedOfficialHit, type CandidateInput, type SearchHit } from "@/brand/competition";
 import { instagramUsernameFromUrl, normalizeSearchApiParams, type SearchApiPayload, type ResearchEvidence } from "@/brand/research-normalize";
 import { callSearchApi, fetchSearchApiAccount, SearchApiError } from "@/lib/providers/searchapi";
 import { invokeResearchOpenAI, prepareCandidateRequest, prepareFallbackRequest, prepareSummaryRequest, validateResearchCandidates, validateResearchSummary, type PreparedResearchRequest } from "@/lib/providers/research-openai";
 import { ProviderError } from "@/lib/providers/runtime";
 import { researchDb, searchApiKey, researchConfigurationError } from "./db";
 import { terminalTask, type ResearchScan, type ResearchTask, type ResearchCompetitor, type ResearchObservation } from "./types";
+import { officialSocialLinks } from "./official-links";
 
 const db = () => researchDb();
 const now = () => new Date().toISOString();
@@ -54,7 +55,6 @@ async function advance(scan: ResearchScan) {
     const input = objectValue(scan.payload);
     const brand = textValue(input.brand, 100); const product = textValue(input.product, 220);
     await ensureTask("discovery", "discovery:1", { params: { engine: "google", q: `${brand} ${product} competitors alternatives India` } });
-    await ensureTask("discovery", "discovery:2", { params: { engine: "google", q: `${product} brands similar to ${brand} India` } });
     return;
   }
   // Only a confirmed temporary provider failure can lead to a separately budgeted web fallback.
@@ -65,25 +65,44 @@ async function advance(scan: ResearchScan) {
   tasks = await tasksFor(scan);
   const discovery = tasks.filter(t => t.kind === "discovery" || t.kind === "fallback" && t.payload.source_kind === "discovery");
   if (!discovery.length || discovery.some(t => !terminalTask(t.status))) { await setStage(scan, "discovery"); return; }
-  const extract = tasks.find(t => t.kind === "extract");
+  const extract = tasks.find(t => t.dedupe_key === "extract:expanded") ?? tasks.find(t => t.kind === "extract");
   if (!extract) { await ensureTask("extract", "extract", {}, discovery.map(t => t.id)); await setStage(scan, "verification"); return; }
   if (!terminalTask(extract.status)) return;
   const candidates = (Array.isArray(extract.result.candidates) ? extract.result.candidates : []) as CandidateInput[];
-  for (const candidate of candidates.slice(0, 5)) await ensureTask("verify", `verify:${candidate.official_domain}`, { candidate, params: { engine: "google", q: `"${candidate.name}" official website Instagram India` } }, [extract.id]);
+  // Buy a second discovery search only if the first did not supply five candidates.
+  if (extract.status === "succeeded" && discovery.some(t => t.status === "succeeded") && candidates.length < 5 && !tasks.some(t => t.dedupe_key === "discovery:2")) {
+    await ensureTask("discovery", "discovery:2", { params: { engine: "google", q: `${textValue(scan.payload.product, 220)} brands similar to ${textValue(scan.payload.brand, 100)} India` } });
+    return;
+  }
+  if (tasks.some(t => t.dedupe_key === "discovery:2") && extract.dedupe_key !== "extract:expanded") {
+    await ensureTask("extract", "extract:expanded", {}, discovery.map(t => t.id)); return;
+  }
+  for (const candidate of candidates.slice(0, 5)) {
+    const prior = discovery.find(t => verifiedOfficialHit(candidate, payloadOf(t)?.hits ?? []));
+    await ensureTask("verify", `verify:${candidate.official_domain}`, { candidate, params: { engine: "google", q: verificationQuery(candidate) }, ...(prior ? { reuse_response: payloadOf(prior), reuse_observed_at: prior.result.observed_at } : {}) }, [extract.id]);
+  }
   tasks = await tasksFor(scan);
   const verification = tasks.filter(t => t.kind === "verify" || t.kind === "fallback" && t.payload.source_kind === "verify");
   if (verification.some(t => !terminalTask(t.status))) { await setStage(scan, "verification"); return; }
   const competitors = await competitorsFor(scan);
+  if (competitors.length < 3) {
+    await checked(db().from("brand_competitor_scans").update({ status: "succeeded", stage: "complete", result_count: competitors.length, error_code: "insufficient_verified_competitors", completed_at: now(), cache_expires_at: new Date(Date.now() + 86400000).toISOString() }).eq("id", scan.id).in("status", ["queued", "running"]));
+    await checked(db().from("brand_campaigns").update({ status: "planning", updated_at: now() }).eq("id", scan.campaign_id).eq("company_id", scan.company_id).in("status", ["draft", "scanning", "planning"]));
+    return;
+  }
   for (const competitor of competitors) {
     const verificationTask = verification.find(t => objectValue(t.payload.candidate).official_domain === competitor.official_domain && t.status === "succeeded");
     const response = verificationTask ? payloadOf(verificationTask) : null;
-    const handle = response?.hits.filter(hit => nameInText(competitor.name, `${hit.title} ${hit.snippet}`)).map(hit => instagramUsernameFromUrl(hit.url)).find(Boolean) ?? null;
+    const officialLinks = Array.isArray(verificationTask?.result.social_links) ? verificationTask.result.social_links : [];
+    const handle = officialLinks.map(instagramUsernameFromUrl).find(Boolean) ?? response?.hits.filter(hit => nameInText(competitor.name, `${hit.title} ${hit.snippet}`)).map(hit => instagramUsernameFromUrl(hit.url)).find(Boolean) ?? null;
     const base = { competitor_id: competitor.id };
     const dependencies = verificationTask ? [verificationTask.id] : [];
     await ensureTask("meta_ads", `meta:${competitor.id}`, { ...base, params: { engine: "meta_ad_library", q: competitor.name, country: "IN" } }, dependencies);
-    await ensureTask("google_ads", `google:${competitor.id}`, { ...base, params: { engine: "google_ads_transparency_center", domain: competitor.official_domain, time_period: "last_30_days" } }, dependencies);
-    await ensureTask("products", `products:${competitor.id}`, { ...base, params: { engine: "google", q: `site:${competitor.official_domain} ${textValue(scan.payload.product, 180)} product price India` } }, dependencies);
-    await ensureTask("instagram_profile", `profile:${competitor.id}`, { ...base, params: handle ? { engine: "instagram_profile", username: handle } : {}, unavailable_reason: handle ? null : "profile_not_found" }, dependencies, handle ? "queued" : "skipped");
+    const website = competitorWebsite(competitor);
+    const sharedParent = new URL(website).pathname !== "/";
+    await ensureTask("google_ads", `google:${competitor.id}`, { ...base, params: { engine: "google_ads_transparency_center", domain: domainOf(website)!, time_period: "last_30_days" }, unavailable_reason: sharedParent ? "shared_parent_domain" : null }, dependencies, sharedParent ? "skipped" : "queued");
+    await ensureTask("products", `products:${competitor.id}`, { ...base, params: { engine: "google", q: `site:${website.replace(/^https:\/\/(www\.)?/, "")} ${competitor.name} ${textValue(scan.payload.product, 180).replace(/^our\s+/i, "")} product price India` } }, dependencies);
+    await ensureTask("instagram_profile", `profile:${competitor.id}`, { ...base, official_social_links: officialLinks, params: handle ? { engine: "instagram_profile", username: handle } : {}, unavailable_reason: handle ? null : "profile_not_found" }, dependencies, handle ? "queued" : "skipped");
   }
   tasks = await tasksFor(scan);
   for (const profile of tasks.filter(t => t.kind === "instagram_profile" && terminalTask(t.status))) {
@@ -113,16 +132,16 @@ async function saveEvidence(scan: ResearchScan, rows: Array<{ kind: string; titl
   return records;
 }
 function hitEvidence(hit: SearchHit, kind: string) {
-  return { kind, title: hit.title, url: hit.url, text: hit.snippet, sourceDate: hit.sourceDate, attributes: { coverage: "Indexed search excerpt; not a complete page" } };
+  return { kind, title: hit.title, url: hit.url, text: hit.snippet, sourceDate: hit.sourceDate, attributes: { coverage: "Indexed search excerpt; not a complete page" } as Record<string, unknown> };
 }
 function belongsToBrand(evidence: ResearchEvidence, competitor: ResearchCompetitor) {
   const target = textValue(evidence.attributes.targetDomain);
   const landing = Array.isArray(evidence.attributes.landingUrls) ? evidence.attributes.landingUrls : [];
-  const domains = [target, ...landing.map(value => typeof value === "string" ? domainOf(value) : null)].filter((value): value is string => !!value);
+  const urls = [...landing, ...(target ? [`https://${target}/`] : [])];
   // A same-name advertiser alone is not sufficient evidence of ownership.
-  return domains.some(domain => isDomainWithin(domain, competitor.official_domain));
+  return urls.some(url => brandOwnsUrl(competitor, url));
 }
-async function processSearchResult(scan: ResearchScan, task: ResearchTask, response: SearchApiPayload, observedAt: string) {
+async function processSearchResult(scan: ResearchScan, task: ResearchTask, response: SearchApiPayload, observedAt: string, readLinks = true) {
   const kind = task.kind === "fallback" ? textValue(task.payload.source_kind) : task.kind;
   const competitor = task.payload.competitor_id ? (await competitorsFor(scan)).find(c => c.id === task.payload.competitor_id) : undefined;
   if (kind === "discovery") await saveEvidence(scan, response.hits.map(hit => hitEvidence(hit, task.kind === "fallback" ? "web_fallback" : "discovery")), observedAt, response.searchId);
@@ -133,18 +152,30 @@ async function processSearchResult(scan: ResearchScan, task: ResearchTask, respo
     const id = stableId(`${scan.id}:competitor:${candidate.official_domain}`);
     await checked(db().from("brand_competitors").upsert({ id, company_id: scan.company_id, campaign_id: scan.campaign_id, scan_id: scan.id, name: candidate.name, official_domain: candidate.official_domain, rationale: candidate.rationale, status: "candidate", evidence_ids: candidate.evidence_ids, verified_at: observedAt, research_status: "pending", research_summary: {} }, { onConflict: "scan_id,official_domain", ignoreDuplicates: true }));
     const record = (await competitorsFor(scan)).find(c => c.id === id)!;
+    const pageLinks = readLinks ? await officialSocialLinks(hit.url) : Array.isArray(task.result.social_links) ? task.result.social_links : [];
+    // Parent-company pages can link to a corporate account in their footer.
+    // Only use an Instagram profile whose handle also identifies this brand.
+    const brandName = candidate.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const socialLinks = pageLinks.filter(link => {
+      const handle = instagramUsernameFromUrl(link)?.toLowerCase().replace(/[^a-z0-9]/g, "");
+      return brandName.length > 1 && handle?.includes(brandName);
+    });
     const officialHit = hitEvidence(hit, "official_site");
+    officialHit.attributes.social_links = socialLinks;
     if (task.kind === "fallback") { officialHit.text = ""; officialHit.attributes.coverage = "Official URL cited by web search; generated summary retained separately"; await saveEvidence(scan, [hitEvidence(hit, "web_fallback")], observedAt, response.searchId, record); }
     const official = await saveEvidence(scan, [officialHit], observedAt, response.searchId, record);
     await checked(db().from("brand_competitors").update({ evidence_ids: [...new Set([...candidate.evidence_ids, ...official.map(row => row.id)])] }).eq("id", id));
-    return { verified: true, competitor_id: id };
+    return { verified: true, competitor_id: id, social_links: socialLinks };
   }
   if (!competitor) return {};
-  if (kind === "products") await saveEvidence(scan, response.hits.filter(hit => isDomainWithin(domainOf(hit.url) ?? "", competitor.official_domain)).map(hit => hitEvidence(hit, task.kind === "fallback" ? "web_fallback" : "product_price")), observedAt, response.searchId, competitor);
+  if (kind === "products") await saveEvidence(scan, response.hits.filter(hit => brandOwnsUrl(competitor, hit.url)).map(hit => hitEvidence(hit, task.kind === "fallback" ? "web_fallback" : "product_price")), observedAt, response.searchId, competitor);
   if (["meta_ads", "google_ads"].includes(kind)) await saveEvidence(scan, response.evidence.filter(row => belongsToBrand(row, competitor)), observedAt, response.searchId, competitor);
   if (kind === "instagram_profile") {
-    const profileDomain = response.profileWebsite ? domainOf(response.profileWebsite) : null;
-    if (!profileDomain || !isDomainWithin(profileDomain, competitor.official_domain)) return { profile_verified: false, post_id: null };
+    const handle = textValue(objectValue(task.payload.params).username);
+    if (!handle || response.instagramUsername?.toLowerCase() !== handle.toLowerCase()) return { profile_verified: false, post_id: null };
+    const officialLinks = Array.isArray(task.payload.official_social_links) ? task.payload.official_social_links : [];
+    const linkedFromOfficial = officialLinks.some(link => instagramUsernameFromUrl(link)?.toLowerCase() === handle.toLowerCase());
+    if (!brandOwnsUrl(competitor, response.profileWebsite) && !linkedFromOfficial) return { profile_verified: false, post_id: null };
     await saveEvidence(scan, response.evidence, observedAt, response.searchId, competitor);
     return { profile_verified: true, post_id: response.postId };
   }
@@ -204,6 +235,13 @@ async function searchTask(scan: ResearchScan, task: ResearchTask) {
   const params = normalizeSearchApiParams(objectValue(task.payload.params) as Record<string, string>);
   let response = payloadOf(task);
   let observedAt = textValue(task.result.observed_at) || now();
+  // Discovery may already prove this official website. Reuse that paid response.
+  const reused = objectValue(task.payload.reuse_response);
+  if (!response && Array.isArray(reused.hits)) {
+    response = reused as SearchApiPayload;
+    observedAt = textValue(task.payload.reuse_observed_at) || observedAt;
+    await checkpoint(task, { response, observed_at: observedAt, cache_hit: true });
+  }
   if (!response) {
     const cache = await cachedSearch(task, params);
     if (cache) { response = cache.response; observedAt = cache.observedAt; }
@@ -230,8 +268,47 @@ async function failPaidTask(task: ResearchTask, attemptId: string, cause: unknow
   const uncertain = cause instanceof SearchApiError ? cause.uncertain : ["provider_timeout", "submission_unknown", "research_persistence_failed", "research_lease_lost"].includes(code);
   const retryable = !uncertain && task.attempt_count < 2 && ["provider_unavailable", "provider_rate_limited"].includes(code);
   const retrySeconds = Math.max(cause instanceof SearchApiError ? cause.retryAfter ?? 0 : 0, 15 * 2 ** task.attempt_count + Math.floor(Math.random() * 5));
-  await finishAttempt(task, attemptId, uncertain ? "uncertain" : "failed", { failure_code: code, latency_ms: latency, retry_after: retrySeconds });
+  await finishAttempt(task, attemptId, uncertain ? "uncertain" : "failed", { failure_code: code, latency_ms: latency, retry_after: retrySeconds, ...(cause instanceof SearchApiError && cause.requestId ? { request_id: cause.requestId } : {}) });
   await finishTask(task, uncertain ? "uncertain" : retryable ? "queued" : "failed", {}, code, retryable ? new Date(Date.now() + retrySeconds * 1000).toISOString() : null);
+}
+
+/** Re-evaluate purchased responses only. Never calls either provider or queues
+ * work. The caller must establish campaign/company authority first. */
+export async function recoverSavedResearch(scan: ResearchScan) {
+  if (!["succeeded", "failed"].includes(scan.status)) return;
+  const tasks = await tasksFor(scan);
+  const observations = await observationsFor(scan);
+  const savedHits: SearchHit[] = observations.filter(row => row.evidence_kind === "official_site").map(row => ({ title: row.source_title, url: row.source_url, snippet: row.source_snippet ?? "", sourceDate: null, asin: null, rating: null, reviewCount: null, price: null, priceText: null }));
+  for (const task of tasks.filter(t => t.kind === "verify")) {
+    const response = payloadOf(task); if (!response) continue;
+    const result = await processSearchResult(scan, task, { ...response, hits: [...response.hits, ...savedHits] }, textValue(task.result.observed_at) || scan.completed_at || now(), false);
+    await checked(db().from("brand_research_tasks").update({ result: { ...task.result, ...result, rechecked_at: now() } }).eq("id", task.id).eq("scan_id", scan.id));
+  }
+  for (const task of tasks.filter(t => ["products", "meta_ads", "google_ads", "instagram_profile", "instagram_comments"].includes(t.kind))) {
+    const response = payloadOf(task); if (!response) continue;
+    const result = await processSearchResult(scan, task, response, textValue(task.result.observed_at) || scan.completed_at || now(), false);
+    await checked(db().from("brand_research_tasks").update({ result: { ...task.result, ...result, rechecked_at: now() } }).eq("id", task.id).eq("scan_id", scan.id));
+  }
+  const competitors = await competitorsFor(scan);
+  const evidence = await observationsFor(scan);
+  for (const competitor of competitors) {
+    const summary = { ...objectValue(competitor.research_summary) };
+    const citations = { ...objectValue(summary.field_evidence_ids) };
+    const rows = evidence.filter(row => row.competitor_id === competitor.id);
+    for (const [field, kinds] of Object.entries({ product_price: ["product_price"], campaign: ["meta_ad", "google_ad"], social: ["social_post"] })) {
+      if (summary[field] && summary[field] !== "Insufficient evidence") continue;
+      const sources = rows.filter(row => kinds.includes(row.evidence_kind)); if (!sources.length) continue;
+      summary[field] = field === "social" ? `${sources.length} saved public posts. Open Posts to review the content.` : field === "campaign" ? `${sources.length} saved advertisements. Open Ads to review the campaigns.` : `${textValue(sources[0].source_title, 180)}. See source for product details; price may be unavailable.`;
+      citations[field] = sources.map(row => row.id);
+    }
+    summary.field_evidence_ids = citations;
+    summary.id = competitor.id;
+    summary.evidence_ids = [...new Set(Object.values(citations).flatMap(value => Array.isArray(value) ? value : []).filter(id => rows.some(row => row.id === id)))];
+    const complete = ["product_price", "campaign", "social", "sentiment"].every(field => summary[field] && summary[field] !== "Insufficient evidence");
+    await checked(db().from("brand_competitors").update({ research_summary: summary, research_status: complete ? "complete" : "partial" }).eq("id", competitor.id).eq("scan_id", scan.id));
+  }
+  await checked(db().from("brand_competitor_scans").update({ result_count: competitors.length }).eq("id", scan.id).eq("company_id", scan.company_id));
+  return { competitors: competitors.length, searchRequests: 0 };
 }
 
 async function cloneTask(scan: ResearchScan, task: ResearchTask) {

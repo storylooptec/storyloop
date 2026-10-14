@@ -23,6 +23,7 @@ try{
  await page.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
  const path=`/brand/campaigns/${campaignId}/competitors`;
  await page.goto(origin+path);
+ assert.equal(await page.getByText(/Fresh scan: maximum 32 SearchAPI requests/).count(),1);
  await page.getByRole('button',{name:'Scan competition',exact:true}).evaluate(node=>{node.click();node.click();});
  await page.getByRole('heading',{name:'Your scan is queued'}).waitFor();
  assert.equal(researchState.enqueues,1,'Repeated click creates one job');
@@ -33,6 +34,7 @@ try{
  researchState.phase='complete';
  await page.getByRole('heading',{name:'Your competitor shortlist'}).waitFor({timeout:12000});
  assert.equal(await page.getByRole('checkbox').count(),5);
+ assert.equal(await page.getByRole('button',{name:/Recheck saved results/}).count(),1,'Completed scan offers a free saved-response recheck');
  const cards=page.locator('article').filter({has:page.getByRole('checkbox')});
  const boxes=await cards.evaluateAll(nodes=>nodes.map(node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width};}));
  assert.equal(boxes[0].y,boxes[2].y,'First three cards share desktop row');assert.equal(boxes[3].y,boxes[4].y,'Final two cards share desktop row');assert.ok(boxes[3].y>boxes[0].y);

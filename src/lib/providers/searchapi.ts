@@ -11,13 +11,15 @@ export class SearchApiError extends Error {
   readonly status: number | null;
   readonly retryAfter: number | null;
   readonly uncertain: boolean;
-  constructor(code: string, status: number | null = null, retryAfter: number | null = null, uncertain = false) {
+  readonly requestId: string | null;
+  constructor(code: string, status: number | null = null, retryAfter: number | null = null, uncertain = false, requestId: string | null = null) {
     super(code);
     this.name = "SearchApiError";
     this.code = code;
     this.status = status;
     this.retryAfter = retryAfter;
     this.uncertain = uncertain;
+    this.requestId = requestId;
   }
 }
 
@@ -92,7 +94,9 @@ export async function callSearchApi(params: Record<string, string>, apiKey: stri
   for (const [key, value] of Object.entries(normalized)) endpoint.searchParams.set(key, value);
   const body = objectValue(await request(endpoint, apiKey, signal));
   const status = objectValue(body.search_metadata).status;
-  if (body.error || body.errors || (status !== undefined && status !== "Success")) throw new SearchApiError("provider_search_failed", 200, null, true);
+  const rawId = objectValue(body.search_metadata).id;
+  const requestId = typeof rawId === "string" && /^[A-Za-z0-9_-]{1,150}$/.test(rawId) ? rawId : null;
+  if (body.error || body.errors || (status !== undefined && status !== "Success")) throw new SearchApiError("provider_search_failed", 200, null, true, requestId);
   const expected = normalized.engine === "google" ? "organic_results" : normalized.engine === "meta_ad_library" ? "ads" : normalized.engine === "google_ads_transparency_center" ? "ad_creatives" : normalized.engine === "instagram_comments" ? "comments" : "posts";
   // Valid empty results may omit the array but still supply Success or total_results: 0.
   if (!Array.isArray(body[expected]) && !(normalized.engine === "instagram_profile" && Object.keys(objectValue(body.profile)).length) && status !== "Success" && objectValue(body.search_information).total_results !== 0) throw new SearchApiError("provider_invalid_response", 200, null, true);

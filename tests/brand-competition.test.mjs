@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compareObservations, domainOf, normalizeSearchParams, parsedSourceDate, publicSourceUrl, sanitizeSearchPayload, searchCacheKey, validateCandidates, verifiedOfficialHit } from "../src/brand/competition.ts";
+import { brandOwnsUrl, verificationQuery, compareObservations, domainOf, normalizeSearchParams, parsedSourceDate, publicSourceUrl, sanitizeSearchPayload, searchCacheKey, validateCandidates, verifiedOfficialHit } from "../src/brand/competition.ts";
 
 test("evidence links reject active schemes, credentials, local addresses and malformed hosts", () => {
   for (const url of ["javascript:alert(1)", "file:///etc/passwd", "https://user:secret@brand.in", "http://localhost/x", "http://127.0.0.1", "http://[::1]/", "https://api.internal/", "https://bad..com/"]) assert.equal(publicSourceUrl(url), null, url);
@@ -56,6 +56,18 @@ test("official-domain verification cannot accept publisher articles or lookalike
   assert.equal(verifiedOfficialHit(candidate, [{ ...hit, url: "https://news.example.org/beta" }]), null);
   assert.equal(verifiedOfficialHit(candidate, [{ ...hit, title: "Completely different company", snippet: "Something else" }]), null);
   assert.equal(verifiedOfficialHit(candidate, [hit]), hit);
+});
+
+test("reviewed parent and regional sites work without accepting other brands or lookalikes", () => {
+  const pepsodent = { name: "Pepsodent", official_domain: "pepsodent.in" };
+  const colgate = { name: "Colgate", official_domain: "colgatepalmolive.co.in" };
+  assert.equal(brandOwnsUrl(pepsodent, "https://www.hul.co.in/brands/personal-care/pepsodent/"), true);
+  for (const url of ["https://www.hul.co.in/brands/personal-care/ponds/", "https://www.hul.co.in/", "https://www.hul.co.in.attacker.com/brands/personal-care/pepsodent/"]) assert.equal(brandOwnsUrl(pepsodent, url), false);
+  assert.equal(brandOwnsUrl(colgate, "https://www.colgate.com/en-in/colgate-dental-screening-basic/start"), true);
+  assert.equal(brandOwnsUrl(colgate, "https://colgate.com.attacker.com/"), false);
+  assert.equal(brandOwnsUrl({ name: "Unrelated", official_domain: colgate.official_domain }, "https://colgate.com/"), false);
+  assert.match(verificationQuery(pepsodent), /official website India/);
+  assert.match(verificationQuery(pepsodent), /-site:instagram.com/);
 });
 
 test("observation comparisons count source changes without producing market-share or sentiment estimates", () => {
