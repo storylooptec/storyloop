@@ -453,7 +453,13 @@ async function discoveryTask(scan: ResearchScan, task: ResearchTask) {
   const error = researchConfigurationError("discovery");
   if (error) { await finishTask(task, "failed", {}, error); return; }
   let value = task.result.ai_value;
-  if (value === undefined && task.result.openai_response) value = normalizeDiscoveryResponse(task.result.openai_response);
+  if (value === undefined && task.result.openai_response) {
+    try { value = normalizeDiscoveryResponse(task.result.openai_response); }
+    catch {
+      if (typeof task.result.attempt_id === "string") await finishAttempt(task, task.result.attempt_id, "failed", { failure_code: "invalid_ai_response", request_id: task.result.request_id, input_tokens: task.result.input_tokens, output_tokens: task.result.output_tokens });
+      await finishTask(task, "failed", {}, "invalid_ai_response"); return;
+    }
+  }
   if (value === undefined) {
     const request = prepareDiscoveryRequest(textValue(scan.payload.brand), textValue(scan.payload.product), textValue(scan.payload.ownDomain) || null);
     const attempt = await reserve(task, "openai", request.estimatedCostUsd, request.reservedInputTokens, request.outputTokens);
@@ -467,7 +473,7 @@ async function discoveryTask(scan: ResearchScan, task: ResearchTask) {
     value = response.value;
     await checkpoint(task, { ai_value: value, observed_at: now(), attempt_id: attempt, request_id: response.requestId });
     await finishAttempt(task, attempt, "success", { request_id: response.requestId, latency_ms: Date.now() - start, input_tokens: response.inputTokens, output_tokens: response.outputTokens });
-  } else if (typeof task.result.attempt_id === "string") await finishAttempt(task, task.result.attempt_id, "success", { request_id: task.result.request_id });
+  } else if (typeof task.result.attempt_id === "string") await finishAttempt(task, task.result.attempt_id, "success", { request_id: task.result.request_id, input_tokens: task.result.input_tokens, output_tokens: task.result.output_tokens });
   const list = objectValue(value).competitors;
   const candidates = excludeOwnBrand((Array.isArray(list) ? list : []) as DiscoveredCompetitor[], textValue(scan.payload.brand), textValue(scan.payload.ownDomain) || null);
   const observedAt = textValue(task.result.observed_at) || now();

@@ -293,10 +293,13 @@ export function discoveryResponseSnapshot(value: unknown): Record<string, unknow
 
 export type DiscoveredCompetitor = { name: string; website: string; official_domain: string; rationale: string; social_links: string[]; source_urls: string[] };
 export function prepareDiscoveryRequest(brand: string, product: string, ownDomain: string | null): PreparedResearchRequest {
+  // Non-reasoning web search forwards input as its search query. A JSON context
+  // object searches for the target itself, not its competitors (live RCA fixture).
+  const query = `Find five direct competitors of ${JSON.stringify(textValue(brand, 100))} in India for ${JSON.stringify(textValue(product, 220))}${ownDomain ? ` (target website: https://${ownDomain}/)` : ""}. Identify competing businesses and their official websites. Prioritize official competitor website results, not directories or pages about the target brand. Match the same offering and relevant geographic market.`;
   return prepared("discovery", {
     model: process.env.OPENAI_RESEARCH_MODEL || "gpt-4.1-mini", store: false,
     instructions: `${UNTRUSTED} Use native web search to identify up to five actual competitors. First establish the target business's products/services and location from its official website and retrieved sources. Match the same offering and geographic market, especially local services. Exclude the target, directories, publishers and irrelevant overseas businesses. Each competitor's official website URL MUST be a URL returned or visited by web search; never derive or guess a domain from the brand name. Aim for five, but return fewer if evidence is weak. Include official social profile links only when supported by retrieved sources. Do not search for ads, prices, reviews or sentiment at this stage. Return ONLY a JSON object with this shape: {"competitors":[{"name":"business name","website":"exact retrieved official URL","rationale":"short evidence-based relevance and location","source_urls":["exact retrieved source URL"],"social_links":["verified social profile URL"]}]}. No prose, code fences, markdown or inline citation markers inside JSON. Source URLs will be checked against actual tool sources.`,
-    input: JSON.stringify({ brand: textValue(brand, 100), offering: textValue(product, 220), official_website: ownDomain ? `https://${ownDomain}/` : null, market: "India" }),
+    input: query,
     tools: [{ type: "web_search", search_context_size: "medium", external_web_access: true, user_location: { type: "approximate", country: "IN" } }],
     tool_choice: "required", max_tool_calls: 3, max_output_tokens: 2600,
     include: ["web_search_call.action.sources"],
@@ -304,7 +307,7 @@ export function prepareDiscoveryRequest(brand: string, product: string, ownDomai
 }
 
 /** Only actual tool-returned URLs can establish an official website. A model-supplied domain is never enough. */
-export function normalizeDiscoveryResponse(value: unknown): { competitors: DiscoveredCompetitor[] } {
+export function normalizeDiscoveryResponse(value: unknown): { competitors: DiscoveredCompetitor[]; diagnostics: { returned_count: number; source_count: number; accepted_count: number; rejected: Array<{ name: string; website: string | null; reason: string }> } } {
   const body = objectValue(value);
   const output = Array.isArray(body.output) ? body.output.map(objectValue) : [];
   const calls = output.filter(row => row.type === "web_search_call");
@@ -315,7 +318,7 @@ export function normalizeDiscoveryResponse(value: unknown): { competitors: Disco
   for (const call of calls) {
     const action = objectValue(call.action);
     // open_page/find are allowed only when the tool actually reports the visited URL.
-    if (["open_page", "find"].includes(String(action.type))) add(action.url);
+    if (["open_page", "find_in_page", "find"].includes(String(action.type))) add(action.url);
     for (const source of Array.isArray(action.sources) ? action.sources : []) add(objectValue(source).url);
   }
   const parts = output.filter(row => row.type === "message").flatMap(row => Array.isArray(row.content) ? row.content.map(objectValue) : []).filter(row => row.type === "output_text");
@@ -328,18 +331,20 @@ export function normalizeDiscoveryResponse(value: unknown): { competitors: Disco
   if (!Array.isArray(parsed.competitors)) throw new ProviderError("invalid_ai_response");
   const seen = new Set<string>();
   const competitors: DiscoveredCompetitor[] = [];
+  const rejected: Array<{ name: string; website: string | null; reason: string }> = [];
   for (const raw of parsed.competitors.slice(0, 10)) {
     const row = objectValue(raw); const name = textValue(row.name, 100); const rationale = textValue(row.rationale, 600);
     const supplied = publicSourceUrl(row.website); const website = supplied ? consulted.get(key(supplied)) : null;
     const domain = website ? domainOf(website) : null;
-    if (!website || !domain || isSourceOnlyDomain(domain) || !name || !rationale || seen.has(domain)) continue;
+    const rejection = !supplied ? "invalid_website_url" : !website ? "website_not_in_search_sources" : !domain || isSourceOnlyDomain(domain) ? "not_an_official_business_domain" : !name || !rationale ? "missing_identity_or_rationale" : seen.has(domain) ? "duplicate_domain" : null;
+    if (rejection || !website || !domain) { rejected.push({ name, website: supplied, reason: rejection || "invalid_website_url" }); continue; }
     const urls = (Array.isArray(row.source_urls) ? row.source_urls : []).map(publicSourceUrl).filter((url): url is string => !!url && consulted.has(key(url)));
     const social = (Array.isArray(row.social_links) ? row.social_links : []).map(publicSourceUrl).filter((url): url is string => !!url && consulted.has(key(url)) && /^(www\.)?(facebook|instagram|linkedin|youtube|x|twitter)\.com$/.test(new URL(url).hostname));
     seen.add(domain);
     competitors.push({ name, website, official_domain: domain, rationale, source_urls: [...new Set([website, ...urls])].slice(0, 6), social_links: [...new Set(social)].slice(0, 6) });
     if (competitors.length === 5) break;
   }
-  return { competitors };
+  return { competitors, diagnostics: { returned_count: parsed.competitors.length, source_count: consulted.size, accepted_count: competitors.length, rejected } };
 }
 export function excludeOwnBrand(competitors: DiscoveredCompetitor[], brand: string, ownDomain: string | null) {
   return competitors.filter(row => normalizedName(row.name) !== normalizedName(brand) && !(ownDomain && (isDomainWithin(row.official_domain, ownDomain) || isDomainWithin(ownDomain, row.official_domain))));

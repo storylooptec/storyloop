@@ -1,0 +1,60 @@
+incident:
+  date: "2026-10-15 IST"
+  campaign: Bengaluru FC
+  affected_surface: Brand campaign competition scan
+
+verified_cause:
+  search_input: Serialized campaign JSON was forwarded as the actual search query
+  model_candidates: 5
+  retrieved_source_urls: 12
+  verified_official_websites: 0
+  rejection: Every proposed website was absent from the tool-returned sources
+  validation_decision: Correct to reject unsupported website URLs
+  misleading_message: Research was interrupted
+
+implemented:
+  search_input: Plain-language request for five competitors and their official websites
+  capture: Save bounded public response output before filtering
+  diagnostics: Save returned count, source count, accepted count and per-candidate rejection reason
+  replay: Resume captured output without another provider request
+  empty_result_message: No verified competitors found
+  transport_failure_message: Research could not finish
+  credentials: Never retained in response snapshots
+  database_schema_change: false
+
+request_example:
+  endpoint: "https://api.openai.com/v1/responses"
+  method: POST
+  body:
+    model: gpt-4.1-mini
+    store: false
+    input: >-
+      Find five direct competitors of "Bengalurufc" in India for "the football team"
+      (target website: https://bengalurufc.com/). Identify competing businesses and
+      their official websites. Prioritize official competitor website results,
+      not directories or pages about the target brand. Match the same offering
+      and relevant geographic market.
+    tools:
+      - type: web_search
+        search_context_size: medium
+        external_web_access: true
+        user_location:
+          type: approximate
+          country: IN
+    tool_choice: required
+    max_tool_calls: 3
+    max_output_tokens: 2600
+    include: [web_search_call.action.sources]
+  note: Example of the request shape; production also supplies the verification and JSON-output instructions
+
+validation:
+  live_diagnostic_requests: 1
+  searchapi_requests: 0
+  replay_fixture: tests/fixtures/openai-discovery-bengaluru.json
+  corrected_request_live_test: Pending; the authorised diagnostic used the one live request
+  safeguards: No quota reset, automatic paid retry or unverified competitor insertion
+
+files:
+  request_and_validation: src/lib/providers/research-openai.ts
+  capture_and_replay: src/lib/research/worker.ts
+  interface: src/app/brand/campaigns/[campaignId]/competitors/research-panel.tsx

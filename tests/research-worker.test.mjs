@@ -26,7 +26,7 @@ const workerSource = (await readFile(new URL("src/lib/research/worker.ts", root)
   .replace('from "@/brand/competition"', `from ${JSON.stringify(competitionUrl)}`)
   .replace('from "@/brand/research-normalize"', `from ${JSON.stringify(normalizerUrl)}`)
   .replace(/import \{[^\n]+\} from "@\/lib\/providers\/searchapi";/, 'const { SearchApiError } = globalThis.__storyloopWorkerTest; const callSearchApi = (...args) => globalThis.__storyloopWorkerTest.scenario.search(...args); const fetchSearchApiAccount = () => globalThis.__storyloopWorkerTest.scenario.account();')
-  .replace(/import \{[^\n]+\} from "@\/lib\/providers\/research-openai";/, 'const { excludeOwnBrand, prepareDiscoveryRequest, prepareCandidateRequest, prepareFallbackRequest, prepareSummaryRequest, validateResearchCandidates, validateResearchSummary } = globalThis.__storyloopWorkerTest.ai; const invokeResearchOpenAI = (...args) => globalThis.__storyloopWorkerTest.scenario.ai(...args);')
+  .replace(/import \{[^\n]+\} from "@\/lib\/providers\/research-openai";/, 'const { excludeOwnBrand, normalizeDiscoveryResponse, prepareDiscoveryRequest, prepareCandidateRequest, prepareFallbackRequest, prepareSummaryRequest, validateResearchCandidates, validateResearchSummary } = globalThis.__storyloopWorkerTest.ai; const invokeResearchOpenAI = (...args) => globalThis.__storyloopWorkerTest.scenario.ai(...args);')
   .replace('import { ProviderError } from "@/lib/providers/runtime";', 'const { ProviderError } = globalThis.__storyloopWorkerTest;')
   .replace('import { officialSocialLinks } from "./official-links";', 'const officialSocialLinks = async (url) => { const domain = new URL(url).hostname; const name = domain.split(".")[0]; return ["https://www.instagram.com/parentcorporation/", "https://www.instagram.com/" + name + "care/"]; };')
   .replace('import { researchDb, searchApiKey, researchConfigurationError } from "./db";', 'const researchDb = () => globalThis.__storyloopWorkerTest.scenario.db; const searchApiKey = () => "fixture-key"; const researchConfigurationError = () => null;')
@@ -389,6 +389,17 @@ test("native discovery stops at five cards with zero SearchAPI calls, including 
   assert.deepEqual(context.aiCalls,["discovery"]); assert.equal(context.searches.length,0); assert.equal(context.accounts,0);
   assert.deepEqual(context.tables.brand_research_tasks.map(row=>row.kind),["native_discovery"]);
   assert.equal(context.tables.brand_competitor_scans[0].status,"succeeded");
+});
+
+test("a captured discovery response resumes without repurchasing a provider request", async () => {
+  const context=scenario(); const scan=context.tables.brand_competitor_scans[0];scan.payload.flow="on_demand_v2";scan.status="running";
+  const snapshot=JSON.parse(await readFile(new URL("./fixtures/openai-discovery-bengaluru.json",import.meta.url),"utf8"));
+  context.tables.brand_research_tasks.push({id:id(590),company_id:scan.company_id,campaign_id:scan.campaign_id,scan_id:scan.id,kind:"native_discovery",dedupe_key:"native_discovery",status:"queued",payload:{},result:{openai_response:snapshot},dependencies:[],attempt_count:1,next_attempt_at:instant()});
+  context.ai=async()=>{throw new Error("Captured response must not be purchased again");};
+  await using(context,async()=>{await runResearchWorker();});
+  assert.equal(context.attempts.length,0);assert.equal(context.searches.length,0);assert.equal(context.accounts,0);
+  assert.equal(context.tables.brand_research_tasks[0].status,"succeeded");
+  assert.equal(context.tables.brand_research_tasks[0].result.competitor_count,0);
 });
 
 test("one requested competitor buys at most seven first-page requests; other cards stay untouched", async () => {

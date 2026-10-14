@@ -98,5 +98,15 @@ try{
  for(const checkbox of await page.getByRole('checkbox').all())assert.equal(await checkbox.isDisabled(),true);
  assert.equal(await page.getByRole('button',{name:'Continue with selected →'}).count(),0,'Launched campaign cannot alter selection');
  console.log('PASS mobile, limited evidence, unsafe-link filtering, focus/keyboard, completed polling, and read-only campaign');
+ researchState.readOnly=false;researchState.onDemand=true;researchState.phase='failed';researchState.scanError='no_verified_competitors';
+ await page.goto(origin+path);
+ assert.equal(await page.getByText('No verified competitors found.',{exact:true}).count(),1);
+ assert.equal(await page.getByText('Research was interrupted.',{exact:true}).count(),0);
+ assert.match(await page.getByLabel('Competitor research').innerText(),/No SearchAPI detail searches were started/);
+ await page.locator('main').screenshot({path:'tests/browser/artifacts/research-no-verified-mobile.png'});
+ researchState.scanError='provider_timeout';await page.reload();
+ assert.equal(await page.getByText('Research could not finish.',{exact:true}).count(),1);
+ assert.match(await page.getByLabel('Competitor research').innerText(),/No evidence was saved/);
+ console.log('PASS empty discovery is distinct from transport failure; no false claim of saved evidence');
  assert.deepEqual(errors,[],'No browser runtime errors');assert.doesNotMatch(output,/blocked an external request|Application error/);
 }finally{await browser?.close();if(server.exitCode===null){server.kill('SIGTERM');await new Promise(resolve=>server.once('exit',resolve));}await fixture.close();}

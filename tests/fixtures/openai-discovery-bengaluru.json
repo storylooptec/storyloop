@@ -1,0 +1,83 @@
+{
+  "id": "resp_00e652db1ca2cd14016acfd8d43b1087d286ccbd92c01e6bab",
+  "model": "gpt-4.1-mini-2025-04-14",
+  "usage": {
+    "input_tokens": 8803,
+    "output_tokens": 376
+  },
+  "output": [
+    {
+      "type": "web_search_call",
+      "action": {
+        "url": null,
+        "type": "search",
+        "query": "{\\\"brand\\\":\\\"Bengalurufc\\\",\\\"offering\\\":\\\"the football team\\\",\\\"official_website\\\":\\\"https://bengalurufc.com/\\\",\\\"market\\\":\\\"India\\\"}",
+        "queries": [
+          "{\\\"brand\\\":\\\"Bengalurufc\\\",\\\"offering\\\":\\\"the football team\\\",\\\"official_website\\\":\\\"https://bengalurufc.com/\\\",\\\"market\\\":\\\"India\\\"}"
+        ],
+        "sources": [
+          {
+            "url": "https://www.owiki.org/wiki/Bengaluru_FC",
+            "title": ""
+          },
+          {
+            "url": "https://wiki.knf7.com/content/wikipedia_en_all_maxi_2025-08/Bengaluru_FC",
+            "title": ""
+          },
+          {
+            "url": "https://www.outlookindia.com/sports/football/indian-super-league-2026-27-guide-live-streaming-clubs-format-and-schedule-all-you-need-to-know-about-isl",
+            "title": ""
+          },
+          {
+            "url": "https://blog.playo.co/top-10-football-clubs-in-india/",
+            "title": ""
+          },
+          {
+            "url": "https://everything.explained.today///South_Indian_Derby/",
+            "title": ""
+          },
+          {
+            "url": "https://www.teamstats.net/teams/football/bengaluru",
+            "title": ""
+          },
+          {
+            "url": "https://escudosfc.com.br/ind.htm",
+            "title": ""
+          },
+          {
+            "url": "https://theawayend.co/reliance-foundation-development-league-rfdl/",
+            "title": ""
+          },
+          {
+            "url": "https://theawayend.co/bdfa-super-division-league/",
+            "title": ""
+          },
+          {
+            "url": "https://www.national-football-teams.com/old/leagues/86/2026_1/Indian_Super_League.html",
+            "title": ""
+          },
+          {
+            "url": "https://footballdatabase.com/ranking/india/1",
+            "title": ""
+          },
+          {
+            "url": "https://www.transfermarkt.co.in/hero-indian-super-league/startseite/wettbewerb/IND1/sort/name",
+            "title": ""
+          }
+        ]
+      },
+      "status": "completed"
+    },
+    {
+      "type": "message",
+      "content": [
+        {
+          "text": "{\"competitors\":[{\"name\":\"Chennaiyin FC\",\"website\":\"https://www.chennayinfc.com/\",\"rationale\":\"Competes in the Indian Super League, a direct competitor to Bengaluru FC.\",\"source_urls\":[\"https://www.chennayinfc.com/\"],\"social_links\":[\"https://twitter.com/ChennaiyinFC\",\"https://www.facebook.com/ChennaiyinFC\"]},{\"name\":\"Kerala Blasters FC\",\"website\":\"https://keralablastersfc.in/\",\"rationale\":\"Competes in the Indian Super League, a direct competitor to Bengaluru FC.\",\"source_urls\":[\"https://keralablastersfc.in/\"],\"social_links\":[\"https://twitter.com/keralablasters\",\"https://www.facebook.com/keralablasters\"]},{\"name\":\"Mumbai City FC\",\"website\":\"https://www.mumbaicityfc.com/\",\"rationale\":\"Competes in the Indian Super League, a direct competitor to Bengaluru FC.\",\"source_urls\":[\"https://www.mumbaicityfc.com/\"],\"social_links\":[\"https://twitter.com/mumbaicityfc\",\"https://www.facebook.com/mumbaicityfc\"]},{\"name\":\"Hyderabad FC\",\"website\":\"https://hydfootballclub.com/\",\"rationale\":\"Competes in the Indian Super League, a direct competitor to Bengaluru FC.\",\"source_urls\":[\"https://hydfootballclub.com/\"],\"social_links\":[\"https://twitter.com/hyderabadfc\",\"https://www.facebook.com/hyderabadfc\"]},{\"name\":\"FC Goa\",\"website\":\"https://fcgoa.in/\",\"rationale\":\"Competes in the Indian Super League, a direct competitor to Bengaluru FC.\",\"source_urls\":[\"https://fcgoa.in/\"],\"social_links\":[\"https://twitter.com/FCGoaOfficial\",\"https://www.facebook.com/FCGoaOfficial\"]}]}",
+          "type": "output_text",
+          "annotations": []
+        }
+      ]
+    }
+  ],
+  "status": "completed"
+}

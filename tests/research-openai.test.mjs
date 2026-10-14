@@ -198,6 +198,9 @@ test("native discovery requires retrieved official URLs, rejects invented domain
   const body = JSON.parse(request.body);
   assert.equal(request.endpoint,"https://api.openai.com/v1/responses"); assert.equal(body.max_tool_calls,3);
   assert.deepEqual(body.include,["web_search_call.action.sources"]);
+  assert.match(body.input,/^Find five direct competitors of "FootieFirst"/);
+  assert.match(body.input,/official websites/);
+  assert.throws(()=>JSON.parse(body.input),SyntaxError,"The web-search input must be a question, not serialized campaign data");
   assert.ok(request.estimatedCostUsd>=0.03); assert.ok(request.reservedInputTokens>=128000);
   const response = {status:"completed",output:[{type:"web_search_call",status:"completed",action:{type:"search",sources:[{url:"https://dynamicfootballacademy.com/"},{url:"https://footiefirst.in/"}]}},{type:"message",content:[{type:"output_text",text:JSON.stringify({competitors:[
     {name:"Dynamic Football Academy",website:"https://dynamicfootballacademy.com/",rationale:"Youth football training in India",source_urls:["https://dynamicfootballacademy.com/"],social_links:["https://instagram.com/invented"]},
@@ -209,6 +212,17 @@ test("native discovery requires retrieved official URLs, rejects invented domain
   await mockedFetch(async(url)=>{assert.equal(url,"https://api.openai.com/v1/responses");return Response.json({...response,id:"resp_discovery",usage:{input_tokens:2000,output_tokens:1000}});},async()=>{assert.equal((await adapter.invokeResearchOpenAI(request,"fixture")).value.competitors.length,2);});
   assert.throws(()=>adapter.normalizeDiscoveryResponse({...response,status:"incomplete"}),/invalid_ai_response/);
 }));
+
+test("captured Bengaluru response explains all five rejections without accepting invented websites", async () => {
+  const response = JSON.parse(await readFile(new URL("./fixtures/openai-discovery-bengaluru.json",import.meta.url),"utf8"));
+  const result = adapter.normalizeDiscoveryResponse(response);
+  assert.equal(result.diagnostics.returned_count,5);
+  assert.equal(result.diagnostics.source_count,12);
+  assert.equal(result.competitors.length,0);
+  assert.equal(result.diagnostics.rejected.length,5);
+  assert.ok(result.diagnostics.rejected.every(row=>row.reason==="website_not_in_search_sources"));
+  assert.match(result.diagnostics.rejected[0].website,/chennayinfc/);
+});
 
 test("discovery captures purchased output before filtering, with replayable sources and no credentials or hidden reasoning", async () => configured(async () => {
   const response = { id: "resp_capture", model: "gpt-4.1-mini", status: "completed", usage: { input_tokens: 8803, output_tokens: 367 }, secret: "not retained", output: [
