@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { normalizedName, brandOwnsUrl, competitorWebsite, verificationQuery, contentHash, domainOf, nameInText, objectValue, parsedSourceDate, publicSourceUrl, textValue, verifiedOfficialHit, type CandidateInput, type SearchHit } from "@/brand/competition";
 import { instagramUsernameFromUrl, normalizeSearchApiParams, type SearchApiPayload, type ResearchEvidence } from "@/brand/research-normalize";
 import { callSearchApi, fetchSearchApiAccount, SearchApiError } from "@/lib/providers/searchapi";
-import { excludeOwnBrand, prepareDiscoveryRequest, type DiscoveredCompetitor, invokeResearchOpenAI, prepareCandidateRequest, prepareFallbackRequest, prepareSummaryRequest, validateResearchCandidates, validateResearchSummary, type PreparedResearchRequest } from "@/lib/providers/research-openai";
+import { excludeOwnBrand, normalizeDiscoveryResponse, prepareDiscoveryRequest, type DiscoveredCompetitor, invokeResearchOpenAI, prepareCandidateRequest, prepareFallbackRequest, prepareSummaryRequest, validateResearchCandidates, validateResearchSummary, type PreparedResearchRequest } from "@/lib/providers/research-openai";
 import { ProviderError } from "@/lib/providers/runtime";
 import { researchDb, searchApiKey, researchConfigurationError } from "./db";
 import { terminalTask, type ResearchScan, type ResearchTask, type ResearchCompetitor, type ResearchObservation } from "./types";
@@ -280,7 +280,7 @@ async function failPaidTask(task: ResearchTask, attemptId: string, cause: unknow
   const uncertain = cause instanceof SearchApiError ? cause.uncertain : ["provider_timeout", "submission_unknown", "research_persistence_failed", "research_lease_lost"].includes(code);
   const retryable = !task.kind.startsWith("detail_") && task.kind !== "native_discovery" && !uncertain && task.attempt_count < 2 && ["provider_unavailable", "provider_rate_limited"].includes(code);
   const retrySeconds = Math.max(cause instanceof SearchApiError ? cause.retryAfter ?? 0 : 0, 15 * 2 ** task.attempt_count + Math.floor(Math.random() * 5));
-  await finishAttempt(task, attemptId, uncertain ? "uncertain" : "failed", { failure_code: code, latency_ms: latency, retry_after: retrySeconds, ...(cause instanceof SearchApiError && cause.requestId ? { request_id: cause.requestId } : {}) });
+  await finishAttempt(task, attemptId, uncertain ? "uncertain" : "failed", { failure_code: code, latency_ms: latency, retry_after: retrySeconds, ...(cause instanceof SearchApiError && cause.requestId ? { request_id: cause.requestId } : {}), ...(cause instanceof ProviderError ? { request_id: cause.usage?.providerRequestId, input_tokens: cause.usage?.inputUnits, output_tokens: cause.usage?.outputUnits } : {}) });
   await finishTask(task, uncertain ? "uncertain" : retryable ? "queued" : "failed", {}, code, retryable ? new Date(Date.now() + retrySeconds * 1000).toISOString() : null);
 }
 
@@ -453,13 +453,16 @@ async function discoveryTask(scan: ResearchScan, task: ResearchTask) {
   const error = researchConfigurationError("discovery");
   if (error) { await finishTask(task, "failed", {}, error); return; }
   let value = task.result.ai_value;
+  if (value === undefined && task.result.openai_response) value = normalizeDiscoveryResponse(task.result.openai_response);
   if (value === undefined) {
     const request = prepareDiscoveryRequest(textValue(scan.payload.brand), textValue(scan.payload.product), textValue(scan.payload.ownDomain) || null);
     const attempt = await reserve(task, "openai", request.estimatedCostUsd, request.reservedInputTokens, request.outputTokens);
     if (!attempt) return;
     const start = Date.now();
     let response;
-    try { response = await invokeResearchOpenAI(request, process.env.OPENAI_API_KEY ?? ""); }
+    try { response = await invokeResearchOpenAI(request, process.env.OPENAI_API_KEY ?? "", async snapshot => {
+      await checkpoint(task, { openai_response: snapshot, observed_at: now(), attempt_id: attempt, request_id: snapshot.id, input_tokens: objectValue(snapshot.usage).input_tokens, output_tokens: objectValue(snapshot.usage).output_tokens });
+    }); }
     catch (cause) { await failPaidTask(task, attempt, cause, Date.now() - start); return; }
     value = response.value;
     await checkpoint(task, { ai_value: value, observed_at: now(), attempt_id: attempt, request_id: response.requestId });

@@ -209,3 +209,23 @@ test("native discovery requires retrieved official URLs, rejects invented domain
   await mockedFetch(async(url)=>{assert.equal(url,"https://api.openai.com/v1/responses");return Response.json({...response,id:"resp_discovery",usage:{input_tokens:2000,output_tokens:1000}});},async()=>{assert.equal((await adapter.invokeResearchOpenAI(request,"fixture")).value.competitors.length,2);});
   assert.throws(()=>adapter.normalizeDiscoveryResponse({...response,status:"incomplete"}),/invalid_ai_response/);
 }));
+
+test("discovery captures purchased output before filtering, with replayable sources and no credentials or hidden reasoning", async () => configured(async () => {
+  const response = { id: "resp_capture", model: "gpt-4.1-mini", status: "completed", usage: { input_tokens: 8803, output_tokens: 367 }, secret: "not retained", output: [
+    { type: "reasoning", summary: "not retained" },
+    { type: "web_search_call", status: "completed", action: { type: "search", query: "football competitors", sources: [{url:"https://www.beta.in/",title:"Beta"}] } },
+    { type: "message", content: [{ type: "output_text", text: JSON.stringify({competitors:[{name:"Beta",website:"https://beta.in/",rationale:"Same market",source_urls:["https://www.beta.in/"]}]}), annotations: [] }] }
+  ] };
+  let saved;
+  await mockedFetch(async () => Response.json(response), async () => {
+    const result = await adapter.invokeResearchOpenAI(adapter.prepareDiscoveryRequest("Target","football",null),"fixture",async snapshot => { saved = snapshot; });
+    assert.equal(saved.output[1].content[0].text, response.output[2].content[0].text);
+    assert.deepEqual(adapter.normalizeDiscoveryResponse(saved), result.value);
+    assert.equal(JSON.stringify(saved).includes("not retained"),false);
+  });
+  response.output[2].content[0].text="not JSON";
+  await mockedFetch(async () => Response.json(response), async () => {
+    await assert.rejects(adapter.invokeResearchOpenAI(adapter.prepareDiscoveryRequest("Target","football",null),"fixture",async snapshot => { saved=snapshot; }),{code:"invalid_ai_response"});
+    assert.equal(saved.output[1].content[0].text,"not JSON");
+  });
+}));

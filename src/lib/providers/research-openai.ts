@@ -234,7 +234,7 @@ async function boundedResponse(response: Response): Promise<unknown> {
     throw new ProviderError("provider_timeout");
   } finally { reader.releaseLock(); }
 }
-export async function invokeResearchOpenAI(request: PreparedResearchRequest, apiKey: string): Promise<{ value: unknown; requestId: string | null; inputTokens: number | null; outputTokens: number | null }> {
+export async function invokeResearchOpenAI(request: PreparedResearchRequest, apiKey: string, captureDiscovery?: (response: Record<string, unknown>) => Promise<void>): Promise<{ value: unknown; requestId: string | null; inputTokens: number | null; outputTokens: number | null }> {
   const endpoint = ["fallback", "discovery"].includes(request.kind) ? "https://api.openai.com/v1/responses" : "https://api.openai.com/v1/chat/completions";
   if (request.endpoint !== endpoint || Buffer.byteLength(request.body, "utf8") > MAX_REQUEST_BYTES) throw new ProviderError("provider_invalid_request");
   if (!apiKey.trim()) throw new ProviderError("provider_not_configured");
@@ -254,6 +254,9 @@ export async function invokeResearchOpenAI(request: PreparedResearchRequest, api
   const outputTokens = integer(["fallback", "discovery"].includes(request.kind) ? usage.output_tokens : usage.completion_tokens);
   const id = requestId(body.id) || requestId(response.headers.get("x-request-id"));
   const usageDetails = { inputUnits: inputTokens, outputUnits: outputTokens, providerRequestId: id };
+  // Persist the purchased discovery evidence before validation can discard candidates.
+  // No request, credential, header, provider metadata or hidden reasoning is retained.
+  if (request.kind === "discovery" && captureDiscovery) await captureDiscovery(discoveryResponseSnapshot(body));
   try {
     if (request.kind === "discovery") return { value: normalizeDiscoveryResponse(body), requestId: id ?? null, inputTokens: inputTokens ?? null, outputTokens: outputTokens ?? null };
     if (request.kind === "fallback") return { value: normalizeFallbackSources(body), requestId: id ?? null, inputTokens: inputTokens ?? null, outputTokens: outputTokens ?? null };
@@ -264,6 +267,27 @@ export async function invokeResearchOpenAI(request: PreparedResearchRequest, api
     if (!Array.isArray(objectValue(value).competitors)) throw new Error("invalid_ai_response");
     return { value, requestId: id ?? null, inputTokens: inputTokens ?? null, outputTokens: outputTokens ?? null };
   } catch { throw new ProviderError("invalid_ai_response", 60, usageDetails); }
+}
+
+/** Bounded, replayable public research output. Stored only in service-only task records. */
+export function discoveryResponseSnapshot(value: unknown): Record<string, unknown> {
+  const body = objectValue(value);
+  const safeText = (value: unknown, max: number) => textValue(value, max)
+    .replace(/\bsk-[a-zA-Z0-9_-]{16,}\b/g, "[redacted]")
+    .replace(/([?&](?:api_key|apikey|access_token|token|key)=)[^\s"&\\]+/gi, "$1[redacted]");
+  return { id: requestId(body.id) ?? null, model: textValue(body.model, 100), status: textValue(body.status, 30),
+    usage: { input_tokens: integer(objectValue(body.usage).input_tokens) ?? null, output_tokens: integer(objectValue(body.usage).output_tokens) ?? null },
+    output: (Array.isArray(body.output) ? body.output.map(objectValue) : []).slice(0, 15).flatMap((item): Record<string, unknown>[] => {
+      if (item.type === "web_search_call") {
+        const action = objectValue(item.action);
+        return [{ type: item.type, status: textValue(item.status, 30), action: { type: textValue(action.type, 40),
+          query: safeText(action.query, 1000), queries: (Array.isArray(action.queries) ? action.queries : []).slice(0, 10).map(query => safeText(query, 1000)),
+          url: publicSourceUrl(action.url), sources: (Array.isArray(action.sources) ? action.sources : []).slice(0, 100).map(objectValue).map(source => ({ url: publicSourceUrl(source.url), title: safeText(source.title, 220) })) } }];
+      }
+      if (item.type === "message") return [{ type: item.type, content: (Array.isArray(item.content) ? item.content.map(objectValue) : []).filter(part => part.type === "output_text").slice(0, 3).map(part => ({ type: "output_text", text: safeText(part.text, 24000),
+        annotations: (Array.isArray(part.annotations) ? part.annotations : []).map(objectValue).filter(annotation => annotation.type === "url_citation").slice(0, 100).map(annotation => ({ type: "url_citation", url: publicSourceUrl(annotation.url), title: safeText(annotation.title, 220) })) })) }];
+      return [];
+    }) };
 }
 
 
