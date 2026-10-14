@@ -191,3 +191,21 @@ test("truncated structured output preserves measured usage on its safe typed fai
     });
   });
 }));
+
+
+test("native discovery requires retrieved official URLs, rejects invented domains and excludes the brand", async () => configured(async()=>{
+  const request = adapter.prepareDiscoveryRequest("FootieFirst", "academy", "footiefirst.in");
+  const body = JSON.parse(request.body);
+  assert.equal(request.endpoint,"https://api.openai.com/v1/responses"); assert.equal(body.max_tool_calls,3);
+  assert.deepEqual(body.include,["web_search_call.action.sources"]);
+  assert.ok(request.estimatedCostUsd>=0.03); assert.ok(request.reservedInputTokens>=128000);
+  const response = {status:"completed",output:[{type:"web_search_call",status:"completed",action:{type:"search",sources:[{url:"https://dynamicfootballacademy.com/"},{url:"https://footiefirst.in/"}]}},{type:"message",content:[{type:"output_text",text:JSON.stringify({competitors:[
+    {name:"Dynamic Football Academy",website:"https://dynamicfootballacademy.com/",rationale:"Youth football training in India",source_urls:["https://dynamicfootballacademy.com/"],social_links:["https://instagram.com/invented"]},
+    {name:"Invented domain",website:"https://dynamicfootballacademy.in/",rationale:"Not in sources",source_urls:[]},
+    {name:"FootieFirst",website:"https://footiefirst.in/",rationale:"Own brand",source_urls:[]}
+  ]})}]}]};
+  const result = adapter.excludeOwnBrand(adapter.normalizeDiscoveryResponse(response).competitors,"FootieFirst","footiefirst.in");
+  assert.equal(result.length,1);assert.equal(result[0].official_domain,"dynamicfootballacademy.com");assert.deepEqual(result[0].social_links,[]);
+  await mockedFetch(async(url)=>{assert.equal(url,"https://api.openai.com/v1/responses");return Response.json({...response,id:"resp_discovery",usage:{input_tokens:2000,output_tokens:1000}});},async()=>{assert.equal((await adapter.invokeResearchOpenAI(request,"fixture")).value.competitors.length,2);});
+  assert.throws(()=>adapter.normalizeDiscoveryResponse({...response,status:"incomplete"}),/invalid_ai_response/);
+}));

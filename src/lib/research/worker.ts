@@ -1,9 +1,9 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { brandOwnsUrl, competitorWebsite, verificationQuery, contentHash, domainOf, nameInText, objectValue, parsedSourceDate, publicSourceUrl, textValue, verifiedOfficialHit, type CandidateInput, type SearchHit } from "@/brand/competition";
+import { normalizedName, brandOwnsUrl, competitorWebsite, verificationQuery, contentHash, domainOf, nameInText, objectValue, parsedSourceDate, publicSourceUrl, textValue, verifiedOfficialHit, type CandidateInput, type SearchHit } from "@/brand/competition";
 import { instagramUsernameFromUrl, normalizeSearchApiParams, type SearchApiPayload, type ResearchEvidence } from "@/brand/research-normalize";
 import { callSearchApi, fetchSearchApiAccount, SearchApiError } from "@/lib/providers/searchapi";
-import { invokeResearchOpenAI, prepareCandidateRequest, prepareFallbackRequest, prepareSummaryRequest, validateResearchCandidates, validateResearchSummary, type PreparedResearchRequest } from "@/lib/providers/research-openai";
+import { excludeOwnBrand, prepareDiscoveryRequest, type DiscoveredCompetitor, invokeResearchOpenAI, prepareCandidateRequest, prepareFallbackRequest, prepareSummaryRequest, validateResearchCandidates, validateResearchSummary, type PreparedResearchRequest } from "@/lib/providers/research-openai";
 import { ProviderError } from "@/lib/providers/runtime";
 import { researchDb, searchApiKey, researchConfigurationError } from "./db";
 import { terminalTask, type ResearchScan, type ResearchTask, type ResearchCompetitor, type ResearchObservation } from "./types";
@@ -41,6 +41,7 @@ const payloadOf = (task: ResearchTask): SearchApiPayload | null => task.result?.
 
 /** Reconstruct the next tasks from persisted results; crashes cannot produce duplicate searches. */
 async function advance(scan: ResearchScan) {
+  if (scan.payload.flow === "on_demand_v2") return advanceOnDemand(scan);
   let tasks = await tasksFor(scan);
   const known = new Set(tasks.map(task => task.dedupe_key));
   async function ensureTask(kind: string, key: string, payload: Record<string, unknown>, dependencies: string[] = [], status = "queued") {
@@ -125,7 +126,7 @@ async function advance(scan: ResearchScan) {
 async function saveEvidence(scan: ResearchScan, rows: Array<{ kind: string; title: string; url: string; text: string; sourceDate: string | null; attributes: Record<string, unknown> }>, observedAt: string, searchId: string | null, competitor?: ResearchCompetitor) {
   const records = rows.flatMap(item => {
     const url = publicSourceUrl(item.url); if (!url) return [];
-    const key = `${item.kind}:${contentHash(JSON.stringify([url, item.attributes.commentId ?? null, item.text]))}`;
+    const key = `${scan.payload.flow === "on_demand_v2" ? (competitor?.id ?? "discovery") + ":" : ""}${item.kind}:${contentHash(JSON.stringify([url, item.attributes.commentId ?? null, item.text]))}`;
     return [{ id: stableId(`${scan.id}:evidence:${key}`), company_id: scan.company_id, scan_id: scan.id, competitor_id: competitor?.id ?? null, competitor_name: competitor?.name ?? "Discovery source", competitor_domain: competitor?.official_domain ?? null, evidence_kind: item.kind, source_record_key: key, source_url: url, source_domain: domainOf(url)!, source_title: item.title.slice(0, 300), source_snippet: item.text.slice(0, 1800), source_date_text: item.sourceDate, published_at: parsedSourceDate(item.sourceDate), observed_at: observedAt, provider_search_id: searchId, content_hash: contentHash(JSON.stringify([url, item.text, item.sourceDate])), attributes: item.attributes }];
   });
   if (records.length) await checked(db().from("brand_competitor_observations").upsert(records, { onConflict: "scan_id,source_record_key", ignoreDuplicates: true }));
@@ -142,6 +143,7 @@ function belongsToBrand(evidence: ResearchEvidence, competitor: ResearchCompetit
   return urls.some(url => brandOwnsUrl(competitor, url));
 }
 async function processSearchResult(scan: ResearchScan, task: ResearchTask, response: SearchApiPayload, observedAt: string, readLinks = true) {
+  if (task.kind.startsWith("detail_")) return processDetailResult(scan, task, response, observedAt);
   const kind = task.kind === "fallback" ? textValue(task.payload.source_kind) : task.kind;
   const competitor = task.payload.competitor_id ? (await competitorsFor(scan)).find(c => c.id === task.payload.competitor_id) : undefined;
   if (kind === "discovery") await saveEvidence(scan, response.hits.map(hit => hitEvidence(hit, task.kind === "fallback" ? "web_fallback" : "discovery")), observedAt, response.searchId);
@@ -247,6 +249,16 @@ async function searchTask(scan: ResearchScan, task: ResearchTask) {
     if (cache) { response = cache.response; observedAt = cache.observedAt; }
   }
   if (!response) {
+    if (scan.payload.flow === "on_demand_v2") {
+      const configurationError = researchConfigurationError("details");
+      if (configurationError) { await finishTask(task, "failed", {}, configurationError); return; }
+      // SearchAPI account availability must never block OpenAI discovery.
+      const control = await checked(db().from("brand_research_control").select("*").limit(1).single());
+      if (!control.account_checked_at || Date.parse(control.account_checked_at) < Date.now() - 5 * 60000) {
+        try { await checked(db().rpc("update_research_account", { account_info: await fetchSearchApiAccount(searchApiKey()) })); }
+        catch { await finishTask(task, "failed", {}, "account_check_failed"); return; }
+      }
+    }
     const attemptId = await reserve(task, "searchapi"); if (!attemptId) return;
     const start = Date.now();
     try {
@@ -266,7 +278,7 @@ async function searchTask(scan: ResearchScan, task: ResearchTask) {
 async function failPaidTask(task: ResearchTask, attemptId: string, cause: unknown, latency: number) {
   const code = cause instanceof SearchApiError ? cause.code : cause instanceof Error ? cause.message : "provider_request_failed";
   const uncertain = cause instanceof SearchApiError ? cause.uncertain : ["provider_timeout", "submission_unknown", "research_persistence_failed", "research_lease_lost"].includes(code);
-  const retryable = !uncertain && task.attempt_count < 2 && ["provider_unavailable", "provider_rate_limited"].includes(code);
+  const retryable = !task.kind.startsWith("detail_") && task.kind !== "native_discovery" && !uncertain && task.attempt_count < 2 && ["provider_unavailable", "provider_rate_limited"].includes(code);
   const retrySeconds = Math.max(cause instanceof SearchApiError ? cause.retryAfter ?? 0 : 0, 15 * 2 ** task.attempt_count + Math.floor(Math.random() * 5));
   await finishAttempt(task, attemptId, uncertain ? "uncertain" : "failed", { failure_code: code, latency_ms: latency, retry_after: retrySeconds, ...(cause instanceof SearchApiError && cause.requestId ? { request_id: cause.requestId } : {}) });
   await finishTask(task, uncertain ? "uncertain" : retryable ? "queued" : "failed", {}, code, retryable ? new Date(Date.now() + retrySeconds * 1000).toISOString() : null);
@@ -275,7 +287,7 @@ async function failPaidTask(task: ResearchTask, attemptId: string, cause: unknow
 /** Re-evaluate purchased responses only. Never calls either provider or queues
  * work. The caller must establish campaign/company authority first. */
 export async function recoverSavedResearch(scan: ResearchScan) {
-  if (!["succeeded", "failed"].includes(scan.status)) return;
+  if (scan.payload.flow === "on_demand_v2" || !["succeeded", "failed"].includes(scan.status)) return;
   const tasks = await tasksFor(scan);
   const observations = await observationsFor(scan);
   const savedHits: SearchHit[] = observations.filter(row => row.evidence_kind === "official_site").map(row => ({ title: row.source_title, url: row.source_url, snippet: row.source_snippet ?? "", sourceDate: null, asin: null, rating: null, reviewCount: null, price: null, priceText: null }));
@@ -380,23 +392,23 @@ async function aiTask(scan: ResearchScan, task: ResearchTask) {
 async function runTask(task: ResearchTask) {
   const scan = await checked(db().from("brand_competitor_scans").select("*").eq("id", task.scan_id).eq("company_id", task.company_id).maybeSingle()) as ResearchScan | null;
   if (!scan || !["queued", "running"].includes(scan.status)) { await finishTask(task, "skipped", {}, "scan_finished"); return; }
-  if (task.kind === "clone") await cloneTask(scan, task);
+  if (task.kind === "native_discovery") await discoveryTask(scan, task);
+  else if (task.kind === "clone") await cloneTask(scan, task);
   else if (["extract", "summarize", "fallback"].includes(task.kind)) await aiTask(scan, task);
   else await searchTask(scan, task);
   // Publish the completed report immediately, even if this invocation's drain budget is spent.
-  if (task.kind === "summarize") await advance(scan);
+  if (task.kind === "summarize" || scan.payload.flow === "on_demand_v2") await advance(scan);
 }
 
 /** One short invocation drains independent tasks. PostgreSQL owns cross-worker pacing and all caps. */
 export async function runResearchWorker() {
   const workerId = randomUUID();
   const start = Date.now();
-  const configurationError = researchConfigurationError();
-  if (configurationError) return { processed: 0, error: configurationError };
   const control = await checked(db().from("brand_research_control").select("*").limit(1).single());
   if (!control.enabled) return { processed: 0, error: "provider_disabled" };
+  const legacy = await checked(db().from("brand_competitor_scans").select("payload").eq("provider_key", "searchapi").in("status", ["queued", "running"]));
   // Account endpoints are measured separately; they do not consume a scan's search-attempt allowance.
-  if (!control.account_checked_at || Date.parse(control.account_checked_at) < Date.now() - 5 * 60000) {
+  if ((legacy ?? []).some(row => objectValue(row.payload).flow !== "on_demand_v2") && (!control.account_checked_at || Date.parse(control.account_checked_at) < Date.now() - 5 * 60000)) {
     try {
       const account = await fetchSearchApiAccount(searchApiKey());
       await checked(db().rpc("update_research_account", { account_info: account }));
@@ -433,4 +445,158 @@ export async function runResearchWorker() {
     }));
   }
   return { processed };
+}
+
+
+// V2: discovery stops at cards; only the authorized Get RPC creates detail tasks.
+async function discoveryTask(scan: ResearchScan, task: ResearchTask) {
+  const error = researchConfigurationError("discovery");
+  if (error) { await finishTask(task, "failed", {}, error); return; }
+  let value = task.result.ai_value;
+  if (value === undefined) {
+    const request = prepareDiscoveryRequest(textValue(scan.payload.brand), textValue(scan.payload.product), textValue(scan.payload.ownDomain) || null);
+    const attempt = await reserve(task, "openai", request.estimatedCostUsd, request.reservedInputTokens, request.outputTokens);
+    if (!attempt) return;
+    const start = Date.now();
+    let response;
+    try { response = await invokeResearchOpenAI(request, process.env.OPENAI_API_KEY ?? ""); }
+    catch (cause) { await failPaidTask(task, attempt, cause, Date.now() - start); return; }
+    value = response.value;
+    await checkpoint(task, { ai_value: value, observed_at: now(), attempt_id: attempt, request_id: response.requestId });
+    await finishAttempt(task, attempt, "success", { request_id: response.requestId, latency_ms: Date.now() - start, input_tokens: response.inputTokens, output_tokens: response.outputTokens });
+  } else if (typeof task.result.attempt_id === "string") await finishAttempt(task, task.result.attempt_id, "success", { request_id: task.result.request_id });
+  const list = objectValue(value).competitors;
+  const candidates = excludeOwnBrand((Array.isArray(list) ? list : []) as DiscoveredCompetitor[], textValue(scan.payload.brand), textValue(scan.payload.ownDomain) || null);
+  const observedAt = textValue(task.result.observed_at) || now();
+  for (const candidate of candidates.slice(0, 5)) {
+    const id = stableId(`${scan.id}:competitor:${candidate.official_domain}`);
+    // Persist the card before optional public-page reads. Social handles never gate discovery.
+    await checked(db().from("brand_competitors").upsert({ id, company_id: scan.company_id, campaign_id: scan.campaign_id, scan_id: scan.id, name: candidate.name, official_domain: candidate.official_domain, rationale: candidate.rationale, status: "candidate", evidence_ids: [], verified_at: observedAt,
+      research_status: "not_fetched", research_summary: { website: candidate.website, social_links: candidate.social_links, discovery_provider: "openai_web_search" } }, { onConflict: "scan_id,official_domain", ignoreDuplicates: true }));
+    const competitor = (await competitorsFor(scan)).find(row => row.id === id)!;
+    const rows = await saveEvidence(scan, candidate.source_urls.map(url => ({ kind: url === candidate.website ? "official_site" : "discovery", title: candidate.name, url, text: candidate.rationale, sourceDate: null,
+      attributes: { coverage: "Relevance summarized by OpenAI native web search; URL grounded in retrieved sources" } })), observedAt, textValue(task.result.request_id) || null, competitor);
+    await checked(db().from("brand_competitors").update({ evidence_ids: rows.map(row => row.id) }).eq("id", id));
+  }
+  // At most five bounded, free public HTML reads. No SearchAPI lookup for handles.
+  await Promise.all(candidates.slice(0, 5).map(async candidate => {
+    const links = await officialSocialLinks(candidate.website);
+    const id = stableId(`${scan.id}:competitor:${candidate.official_domain}`);
+    await checked(db().from("brand_competitors").update({ research_summary: { website: candidate.website, social_links: [...new Set([...candidate.social_links, ...links])].slice(0, 12), discovery_provider: "openai_web_search" } }).eq("id", id).eq("research_status", "not_fetched"));
+  }));
+  await finishTask(task, "succeeded", { competitor_count: candidates.length });
+}
+
+function socialLinks(competitor: ResearchCompetitor): string[] {
+  const links = objectValue(competitor.research_summary).social_links;
+  return (Array.isArray(links) ? links : []).map(publicSourceUrl).filter((url): url is string => !!url);
+}
+function facebookLink(competitor: ResearchCompetitor) {
+  return socialLinks(competitor).find(url => /^(www\.)?facebook\.com$/.test(new URL(url).hostname) && !/^\/(?:sharer|share|dialog|plugins|login|watch|reel|ads)(?:\/|\.|$)/.test(new URL(url).pathname));
+}
+function sameFacebookPage(url: string, id: string, links: string[]) {
+  return links.some(link => {
+    const a = new URL(link); const b = new URL(url);
+    if (!/^(www\.)?facebook\.com$/.test(a.hostname)) return false;
+    return a.searchParams.get("id") === id || a.pathname.replace(/\/$/, "").toLowerCase() === b.pathname.replace(/\/$/, "").toLowerCase();
+  });
+}
+async function processDetailResult(scan: ResearchScan, task: ResearchTask, response: SearchApiPayload, observedAt: string) {
+  const competitor = (await competitorsFor(scan)).find(row => row.id === task.payload.competitor_id);
+  if (!competitor) return {};
+  if (task.kind === "detail_page_lookup") {
+    const candidates = (response.pages ?? []).filter(row => normalizedName(row.name) === normalizedName(competitor.name) && (!row.country || ["IN", "India"].includes(row.country)));
+    // One identity check only, never fan out across same-name pages.
+    return { page_id: candidates.length === 1 ? candidates[0].id : null };
+  }
+  if (task.kind === "detail_facebook") {
+    const page = response.facebookPage;
+    const expectedId = textValue(objectValue(task.payload.params).page_id);
+    const verified = !!page && (!expectedId || page.id === expectedId) && (brandOwnsUrl(competitor, page.website) || sameFacebookPage(page.url, page.id, socialLinks(competitor)));
+    if (!verified || !page) return { page_verified: false };
+    await saveEvidence(scan, response.evidence, observedAt, response.searchId, competitor);
+    const links = [...new Set([...socialLinks(competitor), page.url, ...(page.instagram ? [`https://www.instagram.com/${page.instagram}/`] : [])])];
+    await checked(db().from("brand_competitors").update({ research_summary: { ...objectValue(competitor.research_summary), social_links: links } }).eq("id", competitor.id));
+    return { page_verified: true, page_id: page.id };
+  }
+  let rows: ResearchEvidence[] = [];
+  if (task.kind === "detail_products") {
+    await saveEvidence(scan, response.hits.filter(hit => brandOwnsUrl(competitor, hit.url)).map(hit => hitEvidence(hit, "product_price")), observedAt, response.searchId, competitor);
+  } else if (task.kind === "detail_meta") {
+    const id = textValue(objectValue(task.payload.params).page_id);
+    rows = response.evidence.filter(row => row.attributes.advertiserId === id || belongsToBrand(row, competitor));
+  } else if (task.kind === "detail_reviews") rows = response.evidence.filter(row => row.kind === "facebook_review" && row.attributes.pageId === objectValue(task.payload.params).page_id);
+  else if (task.kind === "detail_linkedin") rows = response.evidence.filter(row => normalizedName(textValue(row.attributes.advertiser)) === normalizedName(competitor.name));
+  else if (task.kind === "detail_reddit") rows = response.evidence.filter(row => belongsToBrand(row, competitor));
+  if (rows.length) await saveEvidence(scan, rows, observedAt, response.searchId, competitor);
+  return { saved_count: rows.length };
+}
+
+async function advanceOnDemand(scan: ResearchScan) {
+  let tasks = await tasksFor(scan);
+  const known = new Set(tasks.map(row => row.dedupe_key));
+  const ensure = async (kind: string, competitor: ResearchCompetitor, params: Record<string, string>, dependencies: string[] = [], skip = false) => {
+    const key = `${kind}:${competitor.id}`;
+    if (!known.has(key)) { await addTask(scan, kind, key, { competitor_id: competitor.id, params }, dependencies, skip ? "skipped" : "queued"); known.add(key); }
+  };
+  if (scan.cache_from_scan_id && !tasks.some(row => row.kind === "clone" && terminalTask(row.status))) {
+    if (!tasks.some(row => row.kind === "clone")) await addTask(scan, "clone", "clone", { source_scan_id: scan.cache_from_scan_id });
+    return;
+  }
+  if (!scan.cache_from_scan_id) {
+    const discovery = tasks.find(row => row.kind === "native_discovery");
+    if (!discovery) { await addTask(scan, "native_discovery", "native_discovery", {}); await setStage(scan, "discovery"); return; }
+    if (!terminalTask(discovery.status)) { await setStage(scan, "discovery"); return; }
+  }
+  const competitors = await competitorsFor(scan);
+  for (const competitor of competitors.filter(row => row.research_status === "loading")) {
+    const related = tasks.filter(row => row.payload.competitor_id === competitor.id);
+    // Only the service-only Get RPC is allowed to insert the initial detail task.
+    if (!related.some(row => row.kind === "detail_products")) continue;
+    const fb = facebookLink(competitor);
+    if (fb) await ensure("detail_facebook", competitor, { engine: "facebook_business_page", url: fb });
+    else {
+      await ensure("detail_page_lookup", competitor, { engine: "meta_ad_library_page_search", q: competitor.name });
+      const lookup = related.find(row => row.kind === "detail_page_lookup");
+      if (lookup && terminalTask(lookup.status)) {
+        const pageId = textValue(lookup.result.page_id);
+        await ensure("detail_facebook", competitor, pageId ? { engine: "facebook_business_page", page_id: pageId } : {}, [lookup.id], !pageId);
+      }
+    }
+    const profile = related.find(row => row.kind === "detail_facebook");
+    if (profile && terminalTask(profile.status)) {
+      const pageId = profile.result.page_verified ? textValue(profile.result.page_id) : "";
+      await ensure("detail_reviews", competitor, pageId ? { engine: "facebook_business_page_reviews", page_id: pageId } : {}, [profile.id], !pageId);
+      await ensure("detail_meta", competitor, pageId ? { engine: "meta_ad_library", page_id: pageId, country: "IN" } : {}, [profile.id], !pageId);
+    }
+  }
+  tasks = await tasksFor(scan);
+  for (const competitor of competitors.filter(row => row.research_status === "loading")) {
+    const related = tasks.filter(row => row.payload.competitor_id === competitor.id);
+    const ready = ["detail_products", "detail_linkedin", "detail_reddit", "detail_facebook", "detail_reviews", "detail_meta"].every(kind => related.some(row => row.kind === kind));
+    // Progressively publish purchased evidence, without an extra AI summary call.
+    const rows = (await observationsFor(scan)).filter(row => row.competitor_id === competitor.id);
+    const products = rows.filter(row => row.evidence_kind === "product_price");
+    const ads = rows.filter(row => ["meta_ad", "linkedin_ad", "reddit_ad"].includes(row.evidence_kind));
+    const profiles = rows.filter(row => row.evidence_kind === "social_profile");
+    const reviews = rows.filter(row => row.evidence_kind === "facebook_review");
+    const positive = reviews.filter(row => objectValue(row.attributes).recommendation === "recommends").length;
+    const negative = reviews.filter(row => objectValue(row.attributes).recommendation === "doesn't recommend").length;
+    const done = ready && related.every(row => terminalTask(row.status));
+    const old = objectValue((await competitorsFor(scan)).find(row => row.id === competitor.id)?.research_summary);
+    const pending = done ? "Unavailable from retrieved sources" : "Fetching…";
+    const followers = objectValue(profiles[0]?.attributes).followers;
+    const summary = { ...old, product_price: products.length ? textValue(products[0].source_snippet, 350) || products[0].source_title : pending,
+      campaign: ads.length ? `${ads.length} public ads saved. ${ads.filter(row => row.evidence_kind === "linkedin_ad").length ? "LinkedIn matches are by advertiser name; review sources." : "Open Ads for creative and source dates."}` : pending,
+      social: profiles.length ? `Facebook profile${typeof followers === "number" ? ` · ${followers.toLocaleString("en-IN")} followers` : ""}. Open profile for public details.` : pending,
+      sentiment: reviews.length ? `Sampled Facebook reviews: ${positive} recommend, ${negative} do not recommend; ${reviews.length - positive - negative} without a recommendation label.` : pending,
+      sentiment_sample_size: reviews.length, evidence_ids: rows.map(row => row.id),
+      field_evidence_ids: { product_price: products.map(row => row.id), campaign: ads.map(row => row.id), social: profiles.map(row => row.id), sentiment: reviews.map(row => row.id) },
+      detail_errors: related.filter(row => ["failed", "uncertain"].includes(row.status)).map(row => ({ kind: row.kind, code: row.error_code })),
+    };
+    await checked(db().from("brand_competitors").update({ research_summary: summary, research_status: done ? (products.length && ads.length && profiles.length && reviews.length ? "complete" : "partial") : "loading", ...(done ? { enriched_at: now() } : {}) }).eq("id", competitor.id));
+  }
+  if (tasks.some(row => !terminalTask(row.status))) { await setStage(scan, competitors.length ? "evidence" : "discovery"); return; }
+  // Atomically re-check the queue so a concurrent Get cannot be closed by a stale reader.
+  await checked(db().rpc("complete_on_demand_research", { target_scan_id: scan.id }));
 }

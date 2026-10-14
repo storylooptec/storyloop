@@ -97,9 +97,9 @@ export async function callSearchApi(params: Record<string, string>, apiKey: stri
   const rawId = objectValue(body.search_metadata).id;
   const requestId = typeof rawId === "string" && /^[A-Za-z0-9_-]{1,150}$/.test(rawId) ? rawId : null;
   if (body.error || body.errors || (status !== undefined && status !== "Success")) throw new SearchApiError("provider_search_failed", 200, null, true, requestId);
-  const expected = normalized.engine === "google" ? "organic_results" : normalized.engine === "meta_ad_library" ? "ads" : normalized.engine === "google_ads_transparency_center" ? "ad_creatives" : normalized.engine === "instagram_comments" ? "comments" : "posts";
+  const expected = normalized.engine === "google" ? "organic_results" : ["meta_ad_library", "linkedin_ad_library", "reddit_ad_library"].includes(normalized.engine) ? "ads" : normalized.engine === "meta_ad_library_page_search" ? "page_results" : normalized.engine === "facebook_business_page_reviews" ? "reviews" : normalized.engine === "facebook_business_page" ? "page" : normalized.engine === "google_ads_transparency_center" ? "ad_creatives" : normalized.engine === "instagram_comments" ? "comments" : "posts";
   // Valid empty results may omit the array but still supply Success or total_results: 0.
-  if (!Array.isArray(body[expected]) && !(normalized.engine === "instagram_profile" && Object.keys(objectValue(body.profile)).length) && status !== "Success" && objectValue(body.search_information).total_results !== 0) throw new SearchApiError("provider_invalid_response", 200, null, true);
+  if (!Array.isArray(body[expected]) && !(normalized.engine === "facebook_business_page" && Object.keys(objectValue(body.page)).length) && !(normalized.engine === "instagram_profile" && Object.keys(objectValue(body.profile)).length) && status !== "Success" && objectValue(body.search_information).total_results !== 0) throw new SearchApiError("provider_invalid_response", 200, null, true);
   return sanitizeSearchApiPayload(body, normalized);
 }
 

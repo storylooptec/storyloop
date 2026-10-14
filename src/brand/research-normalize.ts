@@ -2,7 +2,7 @@ import { domainOf, objectValue, publicSourceUrl, textValue, type SearchHit } fro
 import type { Json } from "../types/database.types";
 
 export type ResearchEvidence = {
-  kind: "meta_ad" | "google_ad" | "social_post" | "social_comment" | "product_price";
+  kind: "meta_ad" | "google_ad" | "social_post" | "social_comment" | "product_price" | "social_profile" | "facebook_review" | "linkedin_ad" | "reddit_ad";
   title: string;
   url: string;
   text: string;
@@ -16,6 +16,8 @@ export type SearchApiPayload = {
   instagramUsername: string | null;
   postId: string | null;
   profileWebsite: string | null;
+  facebookPage?: { id: string; name: string; url: string; website: string | null; username: string | null; instagram: string | null };
+  pages?: Array<{ id: string; name: string; alias: string | null; country: string | null }>;
 };
 
 const list = (value: unknown, limit: number): Record<string, unknown>[] => (Array.isArray(value) ? value : []).slice(0, limit).map(objectValue);
@@ -59,6 +61,20 @@ export function normalizeSearchApiParams(input: Record<string, string>): Record<
     params.country = /^(?:[A-Z]{2}|ALL)$/.test(input.country ?? "") ? input.country : "IN";
     params.active_status = ["active", "inactive", "all"].includes(input.active_status) ? input.active_status : "active";
     params.sort_by = "most_recent";
+  } else if (engine === "meta_ad_library_page_search" || engine === "reddit_ad_library") {
+    if (!query) throw new Error("invalid_search_query");
+    params.q = query;
+    if (engine === "meta_ad_library_page_search") params.country = "IN";
+  } else if (engine === "linkedin_ad_library") {
+    const advertiser = textValue(input.advertiser, 200);
+    if (!advertiser) throw new Error("invalid_advertiser");
+    params.advertiser = advertiser; params.country = "IN";
+  } else if (["facebook_business_page", "facebook_business_page_reviews"].includes(engine)) {
+    const pageId = identifier(input.page_id, /^\d{1,30}$/);
+    const url = publicSourceUrl(input.url);
+    if (pageId) params.page_id = pageId;
+    else if (url && /^(www\.)?facebook\.com$/.test(new URL(url).hostname)) params.url = url;
+    else throw new Error("invalid_facebook_page");
   } else if (engine === "google_ads_transparency_center") {
     const domain = domainOf(textValue(input.domain, 253));
     if (!domain) throw new Error("invalid_search_domain");
@@ -96,6 +112,48 @@ export function sanitizeSearchApiPayload(input: unknown, params: Record<string, 
       result.hits.push({ title, url, snippet: textValue(item.snippet, 1200), sourceDate: label(item.date, 100), asin: null, rating: null, reviewCount: null, price: null, priceText: null });
       // Keep links for the worker to match against the brand; never guess a handle from its name.
       result.instagramUsername ??= instagramUsernameFromUrl(url);
+    }
+  } else if (params.engine === "meta_ad_library_page_search") {
+    result.pages = list(raw.page_results, 10).flatMap(row => {
+      const id = identifier(row.page_id, /^\d{1,30}$/); const name = textValue(row.name, 100);
+      return id && name && row.page_is_deleted !== true ? [{ id, name, alias: label(row.page_alias, 120), country: label(row.country, 10) }] : [];
+    });
+  } else if (params.engine === "facebook_business_page") {
+    const page = objectValue(raw.page); const about = objectValue(raw.about);
+    const id = identifier(page.id, /^\d{1,30}$/); const url = publicSourceUrl(page.link);
+    if (id && url && /^(www\.)?facebook\.com$/.test(new URL(url).hostname)) {
+      const name = textValue(page.name, 100); const website = publicSourceUrl(about.website);
+      const instagram = identifier(about.instagram_username, /^[a-zA-Z0-9._]{1,30}$/);
+      result.facebookPage = { id, name, url, website, username: label(page.username, 120), instagram };
+      result.evidence.push({ kind: "social_profile", title: name + " · Facebook", url,
+        text: [label(about.category), label(about.address), label(about.business_services, 600), label(about.price_range)].filter(Boolean).join(" · "), sourceDate: null,
+        attributes: { platform: "Facebook", followers: count(objectValue(page.followers).count), recommendationPercent: typeof about.rating === "number" && about.rating >= 0 && about.rating <= 100 ? about.rating : null, reviewsCount: count(about.reviews_count), website, instagramUsername: instagram } });
+    }
+  } else if (params.engine === "facebook_business_page_reviews") {
+    const page = objectValue(raw.page); const pageId = identifier(page.id, /^\d{1,30}$/);
+    // First-page responses must identify the requested page. Never accept a different page's reviews.
+    if (pageId && pageId === params.page_id) for (const review of list(raw.reviews, 30)) {
+      const url = publicSourceUrl(review.link); const text = textValue(review.text, 1800);
+      if (!url || !/^(www\.)?facebook\.com$/.test(new URL(url).hostname) || !text) continue;
+      const recommendation = ["recommends", "doesn't recommend"].includes(String(review.recommendation)) ? String(review.recommendation) : null;
+      result.evidence.push({ kind: "facebook_review", title: "Facebook review", url, text, sourceDate: label(review.iso_date ?? review.date, 100), attributes: { platform: "Facebook", commentId: label(review.review_id, 100), pageId, recommendation } });
+    }
+  } else if (params.engine === "linkedin_ad_library") {
+    for (const ad of list(raw.ads, 20)) {
+      const url = publicSourceUrl(ad.link); const content = objectValue(ad.content); const advertiser = objectValue(ad.advertiser);
+      if (!url || !/^(www\.)?linkedin\.com$/.test(new URL(url).hostname)) continue;
+      const landingUrls = (Array.isArray(content.headline_links) ? content.headline_links : []).map(value => publicSourceUrl(typeof value === "string" ? value : objectValue(value).link)).filter((url): url is string => !!url);
+      result.evidence.push({ kind: "linkedin_ad", title: textValue(content.headline ?? content.title, 250) || "LinkedIn advertisement", url,
+        text: textValue(content.description ?? content.text, 1800), sourceDate: null,
+        attributes: { platform: "LinkedIn", advertiser: label(advertiser.name), adId: label(ad.id, 100), format: label(ad.ad_type, 80), callToAction: label(content.cta, 100), landingUrls, ownership: "Advertiser name match; ownership not independently confirmed" } });
+    }
+  } else if (params.engine === "reddit_ad_library") {
+    for (const ad of list(raw.ads, 20)) {
+      const creative = objectValue(ad.creative); const url = publicSourceUrl(creative.post_url);
+      if (!url || !/^(www\.)?reddit\.com$/.test(new URL(url).hostname)) continue;
+      const landingUrls = list(creative.content, 5).map(row => publicSourceUrl(row.destination_url)).filter((url): url is string => !!url);
+      result.evidence.push({ kind: "reddit_ad", title: textValue(creative.headline, 250) || "Reddit advertisement", url, text: textValue(creative.body, 1800), sourceDate: label(creative.created_at, 100),
+        attributes: { platform: "Reddit", advertiser: label(objectValue(ad.profile_info).name), adId: label(ad.id, 100), objective: label(ad.objective), landingUrls, format: label(creative.type, 80) } });
     }
   } else if (params.engine === "meta_ad_library") {
     for (const ad of list(raw.ads, 20)) {

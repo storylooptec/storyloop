@@ -18,7 +18,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ camp
   try {
     const db = researchDb();
     let query = db.from("brand_competitor_scans")
-      .select("id,company_id,campaign_id,status,stage,result_count,error_code,created_at,started_at,completed_at,deadline_at,requests_used,cache_hits")
+      .select("id,company_id,campaign_id,status,stage,result_count,error_code,created_at,started_at,completed_at,deadline_at,requests_used,cache_hits,payload")
       .eq("company_id", campaign.company_id).eq("campaign_id", campaignId);
     if (scanId) query = query.eq("id", scanId);
     const { data: scan, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();

@@ -43,7 +43,7 @@ export async function runCompetitorScanAction(form: FormData) {
     const ownDomain = campaign.website_url ? domainOf(campaign.website_url) : null;
     const brand = textValue(campaign.brand_name, 100);
     const product = textValue(campaign.promoted_item, 220);
-    const queryHash = contentHash(JSON.stringify(["searchapi-research-v1", brand.toLowerCase(), product.toLowerCase(), ownDomain, "IN", "en"]));
+    const queryHash = contentHash(JSON.stringify(["openai-discovery-on-demand-v2", brand.toLowerCase(), product.toLowerCase(), ownDomain, "IN", "en"]));
     // Cached research remains usable when providers are paused or credentials change.
     const { data: existing, error: readError } = await db.from("brand_competitor_scans")
       .select("*").eq("company_id", context.companyId).eq("campaign_id", campaign.id)
@@ -54,11 +54,11 @@ export async function runCompetitorScanAction(form: FormData) {
       if (existing.status === "succeeded") await recoverSavedResearch(existing as ResearchScan);
       state = `scan=${existing.id}&${existing.status === "succeeded" ? "cached" : "queued"}=1`;
     } else {
-      const configurationError = researchConfigurationError();
+      const configurationError = researchConfigurationError("discovery");
       if (configurationError) throw new Error(configurationError);
       const { data, error } = await db.rpc("enqueue_research_scan", {
         target_company_id: context.companyId, target_campaign_id: campaign.id, actor_id: context.userId,
-        query_hash: queryHash, payload: { brand, product, ownDomain, market: "IN", language: "en" },
+        query_hash: queryHash, payload: { flow: "on_demand_v2", brand, product, ownDomain, market: "IN", language: "en" },
       });
       if (error) throw new Error(error.message);
       const result = objectValue(data);
@@ -105,4 +105,21 @@ export async function saveCompetitorSelectionAction(form: FormData) {
   revalidatePath(`/brand/campaigns/${campaign.id}/competitors`);
   revalidatePath("/brand/plan");
   redirect(`/brand/plan?campaign=${campaign.id}`);
+}
+
+
+/** The only entry point that authorizes SearchAPI details for a single competitor. */
+export async function getCompetitorDetailsAction(form: FormData): Promise<{ error?: string }> {
+  const { context, campaign } = await campaignContext(form);
+  const scanId = String(form.get("scan_id") ?? "");
+  const competitorId = String(form.get("competitor_id") ?? "");
+  if (!idPattern.test(scanId) || !idPattern.test(competitorId)) return { error: "Invalid competitor selection." };
+  try {
+    const config = researchConfigurationError("details");
+    if (config) return { error: "SearchAPI is not configured for detail fetching. Your shortlist is saved." };
+    const { error } = await researchDb().rpc("enqueue_competitor_details", { target_company_id: context.companyId, target_campaign_id: campaign.id, actor_id: context.userId, target_scan_id: scanId, target_competitor_id: competitorId });
+    if (error) return { error: error.message.includes("discovery_expired") ? "This shortlist is over 24 hours old. Refresh competitor scan first." : "Details could not start. Your saved shortlist is unchanged." };
+    revalidatePath(`/brand/campaigns/${campaign.id}/competitors`);
+    return {};
+  } catch { return { error: "Details could not start. Please reload to check saved progress before trying again." }; }
 }

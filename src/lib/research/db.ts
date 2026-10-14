@@ -13,10 +13,15 @@ export function searchApiKey() {
   return (process.env.SEARCHAPI_API_KEY || process.env.SEARCHAPI_KEY || process.env.SEARCH_API_KEY || "").trim();
 }
 
-export function researchConfigurationError(): string | null {
-  if (process.env.SEARCHAPI_ENABLED === "false") return "provider_disabled";
-  if (!searchApiKey() || !process.env.OPENAI_API_KEY || process.env.OPENAI_API_ENABLED === "false") return "provider_not_configured";
-  const model = process.env.OPENAI_BRIEF_MODEL || "gpt-4.1-mini";
-  if (!["gpt-4.1-mini", "gpt-4.1-mini-2025-04-14"].includes(model) && (!process.env.OPENAI_INPUT_COST_PER_1M_USD || !process.env.OPENAI_OUTPUT_COST_PER_1M_USD)) return "cost_estimate_required";
+export function researchConfigurationError(phase: "discovery" | "details" | "legacy" = "legacy"): string | null {
+  if (phase !== "discovery") {
+    if (process.env.SEARCHAPI_ENABLED === "false") return "provider_disabled";
+    if (!searchApiKey()) return "provider_not_configured";
+  }
+  if (phase !== "details") {
+    if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_ENABLED === "false") return "provider_not_configured";
+    const model = (phase === "discovery" ? process.env.OPENAI_RESEARCH_MODEL : process.env.OPENAI_BRIEF_MODEL) || "gpt-4.1-mini";
+    if (!["gpt-4.1-mini", "gpt-4.1-mini-2025-04-14"].includes(model) && (!process.env.OPENAI_INPUT_COST_PER_1M_USD || !process.env.OPENAI_OUTPUT_COST_PER_1M_USD)) return "cost_estimate_required";
+  }
   return null;
 }

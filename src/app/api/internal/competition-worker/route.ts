@@ -2,7 +2,7 @@ import { researchDb } from "@/lib/research/db";
 import { runResearchWorker } from "@/lib/research/worker";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 export const dynamic = "force-dynamic";
 
 /** Cron supplies a random, short-lived, one-use capability. No provider credentials cross this boundary. */

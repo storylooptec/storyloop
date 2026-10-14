@@ -133,3 +133,19 @@ test("account stats expose only validated quota numbers and reject missing field
   }, async () => { assert.deepEqual(await fetchSearchApiAccount("test-secret"), { monthlyUsed: 4800, monthlyAllowance: 10000, remainingCredits: 5200, searchesThisHour: 250, hourlyRateLimit: 1000, hourlyRemaining: 750 }); });
   await withFetch(async () => Response.json({ account: {} }), async () => { await assert.rejects(fetchSearchApiAccount("test-secret"), error => error.code === "provider_invalid_response"); });
 });
+
+
+test("provided Facebook contracts preserve recommendation scale and scope reviews to the requested page",()=>{
+  const profile=sanitizeSearchApiPayload({page:{id:"123",name:"Beta",link:"https://www.facebook.com/beta",followers:{count:2400}},about:{website:"https://beta.in/",rating:95,reviews_count:200,instagram_username:"beta"}}, {engine:"facebook_business_page",page_id:"123"});
+  assert.equal(profile.facebookPage.id,"123");assert.equal(profile.evidence[0].attributes.recommendationPercent,95);assert.equal(profile.evidence[0].attributes.followers,2400);
+  const input={page:{id:"123"},reviews:[{review_id:"r1",link:"https://www.facebook.com/review/1",text:"Great training",recommendation:"recommends"}],pagination:{next_page_token:"never-follow"}};
+  assert.equal(sanitizeSearchApiPayload(input,{engine:"facebook_business_page_reviews",page_id:"123"}).evidence[0].kind,"facebook_review");
+  assert.equal(sanitizeSearchApiPayload(input,{engine:"facebook_business_page_reviews",page_id:"999"}).evidence.length,0);
+  assert.deepEqual(normalizeSearchApiParams({engine:"facebook_business_page_reviews",page_id:"123",next_page_token:"never-follow"}),{engine:"facebook_business_page_reviews",page_id:"123"});
+});
+test("LinkedIn ads retain identity limitation and Reddit ads never become sentiment evidence",()=>{
+  const linkedin=sanitizeSearchApiPayload({ads:[{id:"11",link:"https://www.linkedin.com/ad-library/detail/11",advertiser:{name:"Beta"},content:{headline:"Train with Beta",description:"Enroll",headline_links:["https://beta.in/"]}}]},{engine:"linkedin_ad_library",advertiser:"Beta"});
+  assert.equal(linkedin.evidence[0].kind,"linkedin_ad");assert.match(linkedin.evidence[0].attributes.ownership,/not independently confirmed/);
+  const reddit=sanitizeSearchApiPayload({ads:[{id:"12",creative:{post_url:"https://www.reddit.com/r/fitness/comments/abc/ad",headline:"Train",body:"Join us",content:[{destination_url:"https://beta.in/"}]}}]},{engine:"reddit_ad_library",q:"Beta"});
+  assert.equal(reddit.evidence[0].kind,"reddit_ad");assert.deepEqual(reddit.evidence[0].attributes.landingUrls,["https://beta.in/"]);
+});

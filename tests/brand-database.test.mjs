@@ -423,3 +423,35 @@ scenario('research scheduler is idle without scans and issues a single-use capab
   await q('select app_private.dispatch_competition_research()');
   assert.equal((await one('select status from brand_competitor_scans where id=$1',[scan])).status,'failed');
 });
+
+
+scenario('on-demand Get is tenant checked, idempotent, and cannot complete over pending work', async()=>{
+  await role('service_role'); const scan=(await enqueueResearch()).scan_id;
+  await q("update brand_competitor_scans set payload=payload||'{\"flow\":\"on_demand_v2\"}',status='succeeded',cache_expires_at=now()+interval '24 hours' where id=$1",[scan]);
+  const competitor=randomUUID();
+  await q("insert into brand_competitors(id,company_id,campaign_id,scan_id,name,official_domain,rationale,verified_at,research_status) values($1,$2,$3,$4,'Competitor','competitor.in','same offering',now(),'not_fetched')",[competitor,id.companyA,id.campaignA,scan]);
+  const args=[id.companyA,id.campaignA,id.userA,scan,competitor];
+  const sql='select enqueue_competitor_details($1,$2,$3,$4,$5) as value';
+  assert.equal((await one(sql,args)).value.disposition,'created');
+  assert.equal((await one(sql,args)).value.disposition,'existing');
+  assert.equal((await one('select count(*)::int as n from brand_research_tasks where scan_id=$1',[scan])).n,3);
+  assert.equal((await one('select complete_on_demand_research($1) as ok',[scan])).ok,false);
+  assert.equal((await one('select requests_used from brand_competitor_scans where id=$1',[scan])).requests_used,0);
+  await fails(sql,[id.companyA,id.campaignA,id.userB,scan,competitor],/campaign_access/);
+  await fails(sql,[id.companyB,id.campaignB,id.userB,scan,competitor],/selection_invalid/);
+  await role('authenticated',id.userA); await fails(sql,args,/permission denied/);
+});
+scenario('on-demand native discovery cannot reserve SearchAPI and the eighth competitor request is denied',async()=>{
+  await role('service_role'); await researchAccount(); const scan=(await enqueueResearch()).scan_id;
+  await q("update brand_competitor_scans set payload=payload||'{\"flow\":\"on_demand_v2\"}' where id=$1",[scan]);
+  const discovery=await researchTask(scan); await q("update brand_research_tasks set kind='native_discovery' where id=$1",[discovery.id]);
+  assert.equal((await researchReserve(discovery)).error,'details_not_requested');
+  const competitor=randomUUID(); await q("insert into brand_competitors(id,company_id,campaign_id,scan_id,name,official_domain,rationale,verified_at,research_status) values($1,$2,$3,$4,'Competitor','competitor.in','same offering',now(),'loading')",[competitor,id.companyA,id.campaignA,scan]);
+  for(let i=0;i<8;i++) {
+    const task=await researchTask(scan); await q("update brand_research_tasks set kind='detail_products',payload=jsonb_build_object('competitor_id',$2::text) where id=$1",[task.id,competitor]);
+    await q('update brand_research_control set next_dispatch_at=null');
+    const reserved=await researchReserve(task);
+    if(i<7) {assert.equal(reserved.allowed,true);await q("select finish_research_attempt($1,$2,'{\"status\":\"success\"}')",[reserved.attempt_id,task.lease_token]);}
+    else assert.equal(reserved.error,'competitor_request_limit');
+  }
+});

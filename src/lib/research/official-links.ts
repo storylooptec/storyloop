@@ -46,7 +46,7 @@ export async function officialSocialLinks(value: string): Promise<string[]> {
     for (const match of html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi)) {
       let link: string | null = null;
       try { link = publicSourceUrl(new URL(match[1].replaceAll("&amp;", "&"), url).href); } catch { continue; }
-      if (link && /^(www\.)?(instagram|facebook)\.com$/.test(new URL(link).hostname)) links.add(link);
+      if (link && /^(www\.)?(instagram|facebook|linkedin|youtube|x|twitter)\.com$/.test(new URL(link).hostname)) links.add(link);
       if (links.size >= 20) break;
     }
     return [...links];

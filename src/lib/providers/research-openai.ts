@@ -1,5 +1,5 @@
 import "server-only";
-import { objectValue, publicSourceUrl, textValue, validateCandidates, type CandidateInput, type CitationSource } from "@/brand/competition";
+import { domainOf, isDomainWithin, isSourceOnlyDomain, normalizedName, objectValue, publicSourceUrl, textValue, validateCandidates, type CandidateInput, type CitationSource } from "@/brand/competition";
 import { configuredOpenAICost, ProviderError } from "@/lib/providers/runtime";
 
 /** The worker must reserve each attempt before invoking this adapter. There are no retries here. */
@@ -10,7 +10,7 @@ export type PreparedResearchRequest = {
   estimatedCostUsd: number;
   reservedInputTokens: number;
   outputTokens: number;
-  kind: "candidates" | "summary" | "fallback";
+  kind: "candidates" | "summary" | "fallback" | "discovery";
 };
 export type ResearchCompetitor = { id: string; name: string; official_domain: string };
 export type ResearchEvidence = CitationSource & {
@@ -74,16 +74,16 @@ function prepared(kind: PreparedResearchRequest["kind"], payload: Record<string,
   if (bytes > MAX_REQUEST_BYTES) throw new ProviderError("research_input_too_large");
   // One token per input byte plus framing is a conservative bound for our bounded UTF-8 inputs.
   // Hosted web search can add up to 128k context tokens, independent of prompt size.
-  const reservedInputTokens = bytes + 1024 + (kind === "fallback" ? 128_000 : 0);
+  const reservedInputTokens = bytes + 1024 + (["fallback", "discovery"].includes(kind) ? 128_000 : 0);
   // Standard GPT-4.1 mini prices verified 2026-10-13 against the official model page.
   // Explicit rates override the default; unknown models require configured rates.
   const knownModel = ["gpt-4.1-mini", "gpt-4.1-mini-2025-04-14"].includes(String(payload.model));
   const hasRateOverride = !!(process.env.OPENAI_INPUT_COST_PER_1M_USD || process.env.OPENAI_OUTPUT_COST_PER_1M_USD);
   const tokenCost = configuredOpenAICost(reservedInputTokens, outputTokens) ?? (!hasRateOverride && knownModel ? (reservedInputTokens * 0.4 + outputTokens * 1.6) / 1_000_000 : null);
   if (tokenCost === null) throw new ProviderError("provider_cost_not_configured");
-  const searchCost = kind === "fallback" ? Number(process.env.OPENAI_WEB_SEARCH_COST_PER_CALL_USD || "0.01") : 0;
-  if (!Number.isFinite(searchCost) || (kind === "fallback" && searchCost <= 0)) throw new ProviderError("provider_cost_not_configured");
-  return { kind, endpoint: kind === "fallback" ? "https://api.openai.com/v1/responses" : "https://api.openai.com/v1/chat/completions",
+  const searchCost = ["fallback", "discovery"].includes(kind) ? Number(process.env.OPENAI_WEB_SEARCH_COST_PER_CALL_USD || "0.01") * (kind === "discovery" ? 3 : 1) : 0;
+  if (!Number.isFinite(searchCost) || (["fallback", "discovery"].includes(kind) && searchCost <= 0)) throw new ProviderError("provider_cost_not_configured");
+  return { kind, endpoint: ["fallback", "discovery"].includes(kind) ? "https://api.openai.com/v1/responses" : "https://api.openai.com/v1/chat/completions",
     body, model: String(payload.model), outputTokens, reservedInputTokens, estimatedCostUsd: tokenCost + searchCost };
 }
 function boundedSources(sources: CitationSource[]): CitationSource[] {
@@ -235,13 +235,13 @@ async function boundedResponse(response: Response): Promise<unknown> {
   } finally { reader.releaseLock(); }
 }
 export async function invokeResearchOpenAI(request: PreparedResearchRequest, apiKey: string): Promise<{ value: unknown; requestId: string | null; inputTokens: number | null; outputTokens: number | null }> {
-  const endpoint = request.kind === "fallback" ? "https://api.openai.com/v1/responses" : "https://api.openai.com/v1/chat/completions";
+  const endpoint = ["fallback", "discovery"].includes(request.kind) ? "https://api.openai.com/v1/responses" : "https://api.openai.com/v1/chat/completions";
   if (request.endpoint !== endpoint || Buffer.byteLength(request.body, "utf8") > MAX_REQUEST_BYTES) throw new ProviderError("provider_invalid_request");
   if (!apiKey.trim()) throw new ProviderError("provider_not_configured");
   let response: Response;
   try {
     response = await fetch(endpoint, { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: request.body,
-      cache: "no-store", redirect: "error", signal: AbortSignal.timeout(30_000) });
+      cache: "no-store", redirect: "error", signal: AbortSignal.timeout(request.kind === "discovery" ? 55_000 : 30_000) });
   } catch { throw new ProviderError("provider_timeout"); }
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
@@ -250,11 +250,12 @@ export async function invokeResearchOpenAI(request: PreparedResearchRequest, api
   }
   const body = objectValue(await boundedResponse(response));
   const usage = objectValue(body.usage);
-  const inputTokens = integer(request.kind === "fallback" ? usage.input_tokens : usage.prompt_tokens);
-  const outputTokens = integer(request.kind === "fallback" ? usage.output_tokens : usage.completion_tokens);
+  const inputTokens = integer(["fallback", "discovery"].includes(request.kind) ? usage.input_tokens : usage.prompt_tokens);
+  const outputTokens = integer(["fallback", "discovery"].includes(request.kind) ? usage.output_tokens : usage.completion_tokens);
   const id = requestId(body.id) || requestId(response.headers.get("x-request-id"));
   const usageDetails = { inputUnits: inputTokens, outputUnits: outputTokens, providerRequestId: id };
   try {
+    if (request.kind === "discovery") return { value: normalizeDiscoveryResponse(body), requestId: id ?? null, inputTokens: inputTokens ?? null, outputTokens: outputTokens ?? null };
     if (request.kind === "fallback") return { value: normalizeFallbackSources(body), requestId: id ?? null, inputTokens: inputTokens ?? null, outputTokens: outputTokens ?? null };
     const choice = objectValue(Array.isArray(body.choices) ? body.choices[0] : null);
     const message = objectValue(choice.message);
@@ -263,4 +264,59 @@ export async function invokeResearchOpenAI(request: PreparedResearchRequest, api
     if (!Array.isArray(objectValue(value).competitors)) throw new Error("invalid_ai_response");
     return { value, requestId: id ?? null, inputTokens: inputTokens ?? null, outputTokens: outputTokens ?? null };
   } catch { throw new ProviderError("invalid_ai_response", 60, usageDetails); }
+}
+
+
+export type DiscoveredCompetitor = { name: string; website: string; official_domain: string; rationale: string; social_links: string[]; source_urls: string[] };
+export function prepareDiscoveryRequest(brand: string, product: string, ownDomain: string | null): PreparedResearchRequest {
+  return prepared("discovery", {
+    model: process.env.OPENAI_RESEARCH_MODEL || "gpt-4.1-mini", store: false,
+    instructions: `${UNTRUSTED} Use native web search to identify up to five actual competitors. First establish the target business's products/services and location from its official website and retrieved sources. Match the same offering and geographic market, especially local services. Exclude the target, directories, publishers and irrelevant overseas businesses. Each competitor's official website URL MUST be a URL returned or visited by web search; never derive or guess a domain from the brand name. Aim for five, but return fewer if evidence is weak. Include official social profile links only when supported by retrieved sources. Do not search for ads, prices, reviews or sentiment at this stage. Return ONLY a JSON object with this shape: {"competitors":[{"name":"business name","website":"exact retrieved official URL","rationale":"short evidence-based relevance and location","source_urls":["exact retrieved source URL"],"social_links":["verified social profile URL"]}]}. No prose, code fences, markdown or inline citation markers inside JSON. Source URLs will be checked against actual tool sources.`,
+    input: JSON.stringify({ brand: textValue(brand, 100), offering: textValue(product, 220), official_website: ownDomain ? `https://${ownDomain}/` : null, market: "India" }),
+    tools: [{ type: "web_search", search_context_size: "medium", external_web_access: true, user_location: { type: "approximate", country: "IN" } }],
+    tool_choice: "required", max_tool_calls: 3, max_output_tokens: 2600,
+    include: ["web_search_call.action.sources"],
+  }, 2600);
+}
+
+/** Only actual tool-returned URLs can establish an official website. A model-supplied domain is never enough. */
+export function normalizeDiscoveryResponse(value: unknown): { competitors: DiscoveredCompetitor[] } {
+  const body = objectValue(value);
+  const output = Array.isArray(body.output) ? body.output.map(objectValue) : [];
+  const calls = output.filter(row => row.type === "web_search_call");
+  if (body.status !== "completed" || !calls.length || calls.length > 3 || calls.some(row => row.status !== "completed")) throw new ProviderError("invalid_ai_response");
+  const consulted = new Map<string, string>();
+  const key = (url: string) => url.replace(/\/$/, "");
+  const add = (value: unknown) => { const url = publicSourceUrl(value); if (url) consulted.set(key(url), url); };
+  for (const call of calls) {
+    const action = objectValue(call.action);
+    // open_page/find are allowed only when the tool actually reports the visited URL.
+    if (["open_page", "find"].includes(String(action.type))) add(action.url);
+    for (const source of Array.isArray(action.sources) ? action.sources : []) add(objectValue(source).url);
+  }
+  const parts = output.filter(row => row.type === "message").flatMap(row => Array.isArray(row.content) ? row.content.map(objectValue) : []).filter(row => row.type === "output_text");
+  for (const part of parts) for (const annotation of Array.isArray(part.annotations) ? part.annotations : []) {
+    const item = objectValue(annotation); if (item.type === "url_citation") add(item.url);
+  }
+  const text = parts.map(row => textValue(row.text, 24000)).join("\n").replace(/^```(?:json)?\s*|\s*```$/g, "");
+  let parsed: Record<string, unknown>;
+  try { parsed = objectValue(JSON.parse(text)); } catch { throw new ProviderError("invalid_ai_response"); }
+  if (!Array.isArray(parsed.competitors)) throw new ProviderError("invalid_ai_response");
+  const seen = new Set<string>();
+  const competitors: DiscoveredCompetitor[] = [];
+  for (const raw of parsed.competitors.slice(0, 10)) {
+    const row = objectValue(raw); const name = textValue(row.name, 100); const rationale = textValue(row.rationale, 600);
+    const supplied = publicSourceUrl(row.website); const website = supplied ? consulted.get(key(supplied)) : null;
+    const domain = website ? domainOf(website) : null;
+    if (!website || !domain || isSourceOnlyDomain(domain) || !name || !rationale || seen.has(domain)) continue;
+    const urls = (Array.isArray(row.source_urls) ? row.source_urls : []).map(publicSourceUrl).filter((url): url is string => !!url && consulted.has(key(url)));
+    const social = (Array.isArray(row.social_links) ? row.social_links : []).map(publicSourceUrl).filter((url): url is string => !!url && consulted.has(key(url)) && /^(www\.)?(facebook|instagram|linkedin|youtube|x|twitter)\.com$/.test(new URL(url).hostname));
+    seen.add(domain);
+    competitors.push({ name, website, official_domain: domain, rationale, source_urls: [...new Set([website, ...urls])].slice(0, 6), social_links: [...new Set(social)].slice(0, 6) });
+    if (competitors.length === 5) break;
+  }
+  return { competitors };
+}
+export function excludeOwnBrand(competitors: DiscoveredCompetitor[], brand: string, ownDomain: string | null) {
+  return competitors.filter(row => normalizedName(row.name) !== normalizedName(brand) && !(ownDomain && (isDomainWithin(row.official_domain, ownDomain) || isDomainWithin(ownDomain, row.official_domain))));
 }

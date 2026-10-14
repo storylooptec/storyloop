@@ -26,7 +26,7 @@ const workerSource = (await readFile(new URL("src/lib/research/worker.ts", root)
   .replace('from "@/brand/competition"', `from ${JSON.stringify(competitionUrl)}`)
   .replace('from "@/brand/research-normalize"', `from ${JSON.stringify(normalizerUrl)}`)
   .replace(/import \{[^\n]+\} from "@\/lib\/providers\/searchapi";/, 'const { SearchApiError } = globalThis.__storyloopWorkerTest; const callSearchApi = (...args) => globalThis.__storyloopWorkerTest.scenario.search(...args); const fetchSearchApiAccount = () => globalThis.__storyloopWorkerTest.scenario.account();')
-  .replace(/import \{[^\n]+\} from "@\/lib\/providers\/research-openai";/, 'const { prepareCandidateRequest, prepareFallbackRequest, prepareSummaryRequest, validateResearchCandidates, validateResearchSummary } = globalThis.__storyloopWorkerTest.ai; const invokeResearchOpenAI = (...args) => globalThis.__storyloopWorkerTest.scenario.ai(...args);')
+  .replace(/import \{[^\n]+\} from "@\/lib\/providers\/research-openai";/, 'const { excludeOwnBrand, prepareDiscoveryRequest, prepareCandidateRequest, prepareFallbackRequest, prepareSummaryRequest, validateResearchCandidates, validateResearchSummary } = globalThis.__storyloopWorkerTest.ai; const invokeResearchOpenAI = (...args) => globalThis.__storyloopWorkerTest.scenario.ai(...args);')
   .replace('import { ProviderError } from "@/lib/providers/runtime";', 'const { ProviderError } = globalThis.__storyloopWorkerTest;')
   .replace('import { officialSocialLinks } from "./official-links";', 'const officialSocialLinks = async (url) => { const domain = new URL(url).hostname; const name = domain.split(".")[0]; return ["https://www.instagram.com/parentcorporation/", "https://www.instagram.com/" + name + "care/"]; };')
   .replace('import { researchDb, searchApiKey, researchConfigurationError } from "./db";', 'const researchDb = () => globalThis.__storyloopWorkerTest.scenario.db; const searchApiKey = () => "fixture-key"; const researchConfigurationError = () => null;')
@@ -130,6 +130,12 @@ function scenario(mode = "success") {
   };
   context.db = { from: (table) => new Query(context, table), rpc: async (name, args) => {
     const tasks = context.tables.brand_research_tasks;
+    if (name === "complete_on_demand_research") {
+      const scan = context.tables.brand_competitor_scans.find(row => row.id === args.target_scan_id);
+      if (tasks.some(row => row.scan_id === scan.id && !terminal(row.status))) return {data:false,error:null};
+      Object.assign(scan, {status:context.tables.brand_competitors.length ? "succeeded" : "failed", stage:"complete"});
+      return {data:true,error:null};
+    }
     if (name === "claim_research_task") {
       const task = tasks.find((row) => row.status === "queued" && row.next_attempt_at <= instant() && row.dependencies.every((dependency) => terminal(tasks.find((item) => item.id === dependency)?.status)));
       if (!task) return { data: null, error: null };
@@ -366,4 +372,42 @@ test("uncertain provider outcomes stay terminal with no automatic retry or fallb
     assert.equal(context.tables.brand_research_tasks.some((task) => task.kind === "fallback"), false);
     assert.equal(context.tables.brand_research_tasks.filter((task) => task.kind === "discovery" && task.status === "uncertain").length, 1);
   });
+});
+
+
+test("native discovery stops at five cards with zero SearchAPI calls, including account checks", async () => {
+  const context = scenario(); context.tables.brand_competitor_scans[0].payload.flow = "on_demand_v2";
+  context.tables.brand_research_control[0].account_checked_at = null;
+  context.ai = async request => {
+    context.aiCalls.push(request.kind); assert.equal(request.kind, "discovery");
+    assert.equal(JSON.parse(request.body).tools[0].type, "web_search");
+    return { value: { competitors: brands.map(b => ({name:b.name,official_domain:b.domain,website:`https://${b.domain}/`,rationale:"Same category and market",source_urls:[`https://${b.domain}/`],social_links:[]})) },requestId:"discovery-test",inputTokens:1000,outputTokens:1000 };
+  };
+  await using(context, async () => { await runResearchWorker(); await runResearchWorker(); });
+  assert.equal(context.tables.brand_competitors.length,5);
+  assert.ok(context.tables.brand_competitors.every(row => row.research_status === "not_fetched"));
+  assert.deepEqual(context.aiCalls,["discovery"]); assert.equal(context.searches.length,0); assert.equal(context.accounts,0);
+  assert.deepEqual(context.tables.brand_research_tasks.map(row=>row.kind),["native_discovery"]);
+  assert.equal(context.tables.brand_competitor_scans[0].status,"succeeded");
+});
+
+test("one requested competitor buys at most seven first-page requests; other cards stay untouched", async () => {
+  const context = scenario(); const scan = context.tables.brand_competitor_scans[0]; scan.payload.flow = "on_demand_v2"; scan.status="running";
+  context.tables.brand_research_tasks.push({id:id(500),company_id:scan.company_id,campaign_id:scan.campaign_id,scan_id:scan.id,kind:"native_discovery",dedupe_key:"native_discovery",status:"succeeded",payload:{},result:{},dependencies:[]});
+  context.tables.brand_competitors = brands.map((b,i)=>({id:id(600+i),scan_id:scan.id,company_id:scan.company_id,campaign_id:scan.campaign_id,name:b.name,official_domain:b.domain,research_status:i===0?"loading":"not_fetched",research_summary:{website:`https://${b.domain}/`,social_links:[]}}));
+  const competitor = context.tables.brand_competitors[0];
+  for(const [kind,params] of [["detail_products",{engine:"google",q:"site:beta.in products prices"}],["detail_linkedin",{engine:"linkedin_ad_library",advertiser:"Beta"}],["detail_reddit",{engine:"reddit_ad_library",q:"Beta"}]]) context.tables.brand_research_tasks.push({id:id(700+context.tables.brand_research_tasks.length),scan_id:scan.id,company_id:scan.company_id,campaign_id:scan.campaign_id,kind,dedupe_key:`${kind}:${competitor.id}`,payload:{competitor_id:competitor.id,params},status:"queued",result:{},dependencies:[],attempt_count:0,next_attempt_at:instant()});
+  context.search = async params => {
+    context.searches.push(params); const response=emptyPayload();
+    if(params.engine === "meta_ad_library_page_search") response.pages=[{id:"12345",name:"Beta",country:"IN"}];
+    if(params.engine === "facebook_business_page") response.facebookPage={id:"12345",name:"Beta",url:"https://www.facebook.com/beta",website:"https://beta.in/",username:"beta",instagram:null};
+    return response;
+  };
+  context.ai = async () => {throw new Error("Get must not call OpenAI");};
+  await using(context,async()=>{await runResearchWorker();await runResearchWorker();});
+  assert.equal(context.searches.length,7); assert.equal(context.aiCalls.length,0);
+  assert.equal(context.tables.brand_competitors[0].research_status,"partial");
+  assert.ok(context.tables.brand_competitors.slice(1).every(row=>row.research_status==="not_fetched"));
+  assert.ok(context.searches.every(params=>!('page' in params)&&!('next_page_token' in params)));
+  const paid=context.searches.length; await using(context,async()=>{await runResearchWorker();}); assert.equal(context.searches.length,paid);
 });
